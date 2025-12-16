@@ -1,0 +1,537 @@
+Here's another paywall that you can match the design with:
+// lib/purchase_view.dart
+import 'dart:async';
+import 'package:flutter/material.dart';
+import 'package:url_launcher/url_launcher.dart';
+import 'package:purchases_flutter/purchases_flutter.dart';
+import 'main.dart';
+
+enum Plan { lifetime, weekly }
+
+const ENTITLEMENT_ID = 'pro1';
+const _PURPLE = Color(0xFF6D28D9); // brand purple
+
+class PurchaseView extends StatefulWidget {
+  final VoidCallback? onSuccess;
+  final VoidCallback? onClose;
+  const PurchaseView({super.key, this.onSuccess, this.onClose});
+
+  @override
+  State<PurchaseView> createState() => _PurchaseViewState();
+}
+
+class _PurchaseViewState extends State<PurchaseView>
+    with SingleTickerProviderStateMixin {
+  Plan selected = Plan.weekly;
+  bool showLoadingBar = false;
+  bool showCloseButton = false;
+  double loadingProgress = 0.0;
+  Timer? _progressTimer;
+
+  Offerings? _offerings;
+  Package? _subPackage;
+  Package? _lifetimePackage;
+  bool _loading = true;
+  String? _error;
+
+  bool get isWeekly => selected == Plan.weekly;
+  bool get freeTrialEnabled => isWeekly;
+
+  @override
+  void initState() {
+    super.initState();
+    _loadOfferings();
+    Purchases.addCustomerInfoUpdateListener((info) {
+      final isPro = info.entitlements.active.containsKey(ENTITLEMENT_ID);
+      if (isPro && mounted) _goSuccess();
+    });
+    Future.delayed(const Duration(seconds: 2), () {
+      if (!mounted) return;
+      setState(() => showLoadingBar = true);
+      const total = 30;
+      int tick = 0;
+      _progressTimer = Timer.periodic(const Duration(milliseconds: 100), (t) {
+        tick++;
+        if (!mounted) return;
+        setState(() => loadingProgress = tick / total);
+        if (tick >= total) t.cancel();
+      });
+    });
+    Future.delayed(const Duration(seconds: 5), () {
+      if (!mounted) return;
+      setState(() {
+        showCloseButton = true;
+        showLoadingBar = false;
+      });
+    });
+  }
+
+  @override
+  void dispose() {
+    _progressTimer?.cancel();
+    super.dispose();
+  }
+
+  Future<void> _loadOfferings() async {
+    setState(() {
+      _loading = true;
+      _error = null;
+    });
+    try {
+      final offerings = await Purchases.getOfferings();
+      final current = offerings.current;
+      setState(() {
+        _offerings = offerings;
+        _subPackage = current?.weekly ?? current?.monthly ?? current?.annual;
+        _lifetimePackage = current?.lifetime;
+      });
+    } catch (e) {
+      _showError('Failed to load products: $e');
+    } finally {
+      if (mounted) setState(() => _loading = false);
+    }
+  }
+
+  Future<void> _buySelected() async {
+    final pkg = (selected == Plan.lifetime) ? _lifetimePackage : _subPackage;
+    if (pkg == null) {
+      _showError('Selected product unavailable. Please try again later.');
+      return;
+    }
+    setState(() => _loading = true);
+    try {
+      await Purchases.purchasePackage(pkg);
+      final info = await Purchases.getCustomerInfo();
+      final isPro = info.entitlements.active.containsKey(ENTITLEMENT_ID);
+      if (!mounted) return;
+      if (isPro) {
+        _goSuccess();
+      } else {
+        _showSnack('Purchase pending…');
+      }
+    } on PurchasesErrorCode {
+    } catch (e) {
+      _showError('Purchase failed: $e');
+    } finally {
+      if (mounted) setState(() => _loading = false);
+    }
+  }
+
+  Future<void> _restore() async {
+    setState(() => _loading = true);
+    try {
+      final info = await Purchases.restorePurchases();
+      final isPro = info.entitlements.active.containsKey(ENTITLEMENT_ID);
+      if (!mounted) return;
+      if (isPro) {
+        _goSuccess();
+      } else {
+        _showSnack('No previous purchases found.');
+      }
+    } catch (e) {
+      _showError('Restore failed: $e');
+    } finally {
+      if (mounted) setState(() => _loading = false);
+    }
+  }
+
+  void _goSuccess() {
+    widget.onSuccess?.call();
+    if (Navigator.canPop(context)) {
+      Navigator.pushReplacementNamed(context, '/home');
+    } else {
+      Navigator.pushReplacementNamed(context, '/home');
+    }
+  }
+
+  void _showSnack(String msg) {
+    if (!mounted) return;
+    ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(msg)));
+  }
+
+  void _showError(String msg) {
+    _error = msg;
+    _showSnack(msg);
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final width = MediaQuery.of(context).size.width;
+    final bool canBuyWeekly = _subPackage != null && !_loading;
+    final bool canBuyLifetime = _lifetimePackage != null && !_loading;
+    final bool ctaEnabled =
+        (selected == Plan.weekly) ? canBuyWeekly : canBuyLifetime;
+
+    return Scaffold(
+      backgroundColor: Colors.black,
+      body: SafeArea(
+        child: Stack(
+          alignment: Alignment.topRight,
+          children: [
+            SingleChildScrollView(
+              padding: const EdgeInsets.symmetric(horizontal: 20),
+              child: Column(
+                children: [
+                  const SizedBox(height: 50),
+                  Image.asset(
+                    'assets/images/paywall_banner.png',
+                    height: MediaQuery.of(context).size.height * 0.15,
+                    fit: BoxFit.contain,
+                  ),
+                  const SizedBox(height: 16),
+                  const Text(
+                    'Frequency Detector Pro',
+                    style: TextStyle(
+                      color: Colors.white,
+                      fontSize: 32,
+                      fontWeight: FontWeight.w800,
+                      height: 1.2,
+                    ),
+                    textAlign: TextAlign.center,
+                  ),
+                  const SizedBox(height: 16),
+
+                  // ---- 4 sales lines with bold/yellow keywords ----
+                  Center(
+                    child: ConstrainedBox(
+                      constraints: const BoxConstraints(maxWidth: 340),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: const [
+                          _FeatureRow(
+                            icon: Icons.schedule,
+                            rich: TextSpan(
+                              style:
+                                  TextStyle(color: Colors.white, fontSize: 16),
+                              children: [
+                                TextSpan(text: 'Unlock '),
+                                TextSpan(
+                                  text: 'UNLIMITED LOGGING',
+                                  style: TextStyle(
+                                      color: Colors.yellow,
+                                      fontWeight: FontWeight.w800),
+                                ),
+                                TextSpan(
+                                    text:
+                                        ' — track every session without limits.'),
+                              ],
+                            ),
+                          ),
+                          SizedBox(height: 12),
+                          _FeatureRow(
+                            icon: Icons.ios_share,
+                            rich: TextSpan(
+                              style:
+                                  TextStyle(color: Colors.white, fontSize: 16),
+                              children: [
+                                TextSpan(text: 'Export your data instantly — '),
+                                TextSpan(
+                                  text: 'OWN IT',
+                                  style: TextStyle(
+                                      color: Colors.yellow,
+                                      fontWeight: FontWeight.w800),
+                                ),
+                                TextSpan(text: ', share it, use it anywhere.'),
+                              ],
+                            ),
+                          ),
+                          SizedBox(height: 12),
+                          _FeatureRow(
+                            icon: Icons.equalizer,
+                            rich: TextSpan(
+                              style:
+                                  TextStyle(color: Colors.white, fontSize: 16),
+                              children: [
+                                TextSpan(text: 'See '),
+                                TextSpan(
+                                  text: 'ADVANCED SPECTRUM VISUALS',
+                                  style: TextStyle(
+                                      color: Colors.yellow,
+                                      fontWeight: FontWeight.w800),
+                                ),
+                                TextSpan(
+                                    text:
+                                        ' — precision free apps can’t touch.'),
+                              ],
+                            ),
+                          ),
+                          SizedBox(height: 12),
+                          _FeatureRow(
+                            icon: Icons.verified_user,
+                            rich: TextSpan(
+                              style:
+                                  TextStyle(color: Colors.white, fontSize: 16),
+                              children: [
+                                TextSpan(text: 'Start with a '),
+                                TextSpan(
+                                  text: 'RISK-FREE TRIAL',
+                                  style: TextStyle(
+                                      color: Colors.yellow,
+                                      fontWeight: FontWeight.w800),
+                                ),
+                                TextSpan(text: ' on the weekly plan.'),
+                              ],
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ),
+
+                  const SizedBox(height: 20),
+
+                  // Plans
+                  _PlanCard(
+                    title: 'Lifetime Plan',
+                    subtitle: _PlanCard.priceTextLifetime,
+                    selected: selected == Plan.lifetime,
+                    chipText: 'SAVE 90%',
+                    onTap: () => setState(() => selected = Plan.lifetime),
+                  ),
+                  const SizedBox(height: 12),
+                  _PlanCard(
+                    title: '3-Day Trial', // ✅ renamed from Weekly Plan
+                    subtitle: _PlanCard.priceTextWeekly,
+                    selected: selected == Plan.weekly,
+                    onTap: () => setState(() => selected = Plan.weekly),
+                  ),
+
+                  const SizedBox(height: 12),
+                  Container(
+                    decoration: BoxDecoration(
+                      color: Colors.white.withOpacity(0.08),
+                      borderRadius: BorderRadius.circular(12),
+                    ),
+                    child: SwitchListTile.adaptive(
+                      value: isWeekly,
+                      onChanged: (val) {
+                        setState(() {
+                          selected = val ? Plan.weekly : Plan.lifetime;
+                        });
+                      },
+                      title: const Text(
+                        'Free Trial Enabled',
+                        style: TextStyle(color: Colors.white, fontSize: 16),
+                      ),
+                      contentPadding:
+                          const EdgeInsets.symmetric(horizontal: 16),
+                    ),
+                  ),
+
+                  const SizedBox(height: 20),
+                  SizedBox(
+                    width: width,
+                    child: ElevatedButton(
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: _PURPLE,
+                        foregroundColor: Colors.white,
+                        padding: const EdgeInsets.symmetric(vertical: 16),
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(12),
+                        ),
+                      ),
+                      onPressed: ctaEnabled ? _buySelected : null,
+                      child: Row(
+                        mainAxisAlignment: MainAxisAlignment.center,
+                        children: const [
+                          Text(
+                            'Start Free Trial',
+                            style: TextStyle(
+                                fontSize: 18, fontWeight: FontWeight.w600),
+                          ),
+                          SizedBox(width: 8),
+                          Icon(Icons.arrow_right_alt_rounded, size: 35),
+                        ],
+                      ),
+                    ),
+                  ),
+                  const SizedBox(height: 16),
+                  SizedBox(
+                    width: double.infinity,
+                    child: SingleChildScrollView(
+                      scrollDirection: Axis.horizontal,
+                      child: Center(
+                        child: Row(
+                          mainAxisAlignment: MainAxisAlignment.center,
+                          children: [
+                            TextButton(
+                              onPressed: _loading ? null : _restore,
+                              child: const Text('Restore',
+                                  style: TextStyle(
+                                      color: Colors.white70, fontSize: 12)),
+                            ),
+                            const SizedBox(width: 20),
+                            TextButton(
+                              onPressed: () => _openUrl(
+                                  'https://sites.google.com/view/xmleula/home'),
+                              child: const Text('Terms of Use EULA',
+                                  style: TextStyle(
+                                      color: Colors.white70, fontSize: 12)),
+                            ),
+                            const SizedBox(width: 20),
+                            TextButton(
+                              onPressed: () => _openUrl(
+                                  'https://sites.google.com/view/odtconverterreader/home'),
+                              child: const Text('Privacy Policy',
+                                  style: TextStyle(
+                                      color: Colors.white70, fontSize: 12)),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ),
+                  ),
+                  const SizedBox(height: 32),
+                ],
+              ),
+            ),
+
+            // loader / close button
+            Padding(
+              padding: const EdgeInsets.only(top: 8.0, right: 8.0),
+              child: AnimatedSwitcher(
+                duration: const Duration(milliseconds: 250),
+                child: showCloseButton
+                    ? IconButton(
+                        key: const ValueKey('close'),
+                        onPressed: _loading
+                            ? null
+                            : () {
+                                Navigator.of(context).maybePop();
+                                widget.onClose?.call();
+                              },
+                        icon: Icon(
+                          Icons.cancel_rounded,
+                          color: Colors.white.withOpacity(0.85),
+                          size: 28,
+                        ),
+                      )
+                    : (showLoadingBar
+                        ? SizedBox(
+                            key: const ValueKey('loader'),
+                            width: 30,
+                            height: 30,
+                            child: CircularProgressIndicator(
+                              value: loadingProgress.clamp(0.0, 1.0),
+                              strokeWidth: 3,
+                              color: _PURPLE,
+                              backgroundColor: Colors.white.withOpacity(0.15),
+                            ),
+                          )
+                        : const SizedBox.shrink()),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Future<void> _openUrl(String url) async {
+    final uri = Uri.parse(url);
+    if (await canLaunchUrl(uri)) {
+      await launchUrl(uri, mode: LaunchMode.externalApplication);
+    }
+  }
+}
+
+class _FeatureRow extends StatelessWidget {
+  final IconData icon;
+  final String? text; // legacy usage
+  final InlineSpan? rich; // new rich text with bold/yellow parts
+  const _FeatureRow({required this.icon, this.text, this.rich})
+      : assert(text != null || rich != null);
+
+  @override
+  Widget build(BuildContext context) {
+    return Row(
+      crossAxisAlignment: CrossAxisAlignment.center,
+      children: [
+        SizedBox(
+          width: 28,
+          child: Icon(icon, color: _PURPLE, size: 20), // purple icon
+        ),
+        const SizedBox(width: 10),
+        Expanded(
+          child: (rich != null)
+              ? Text.rich(rich!)
+              : Text(
+                  text!,
+                  textAlign: TextAlign.left,
+                  style: const TextStyle(color: Colors.white, fontSize: 16),
+                ),
+        ),
+      ],
+    );
+  }
+}
+
+class _PlanCard extends StatelessWidget {
+  final String title;
+  final String subtitle;
+  final String? chipText;
+  final bool selected;
+  final VoidCallback onTap;
+  const _PlanCard(
+      {required this.title,
+      required this.subtitle,
+      required this.selected,
+      required this.onTap,
+      this.chipText});
+
+  static const priceTextLifetime = '\$14.99 for lifetime access';
+  static const priceTextWeekly = 'then \$4.99 per week';
+
+  @override
+  Widget build(BuildContext context) {
+    final borderColor = selected ? _PURPLE : Colors.white.withOpacity(0.18);
+    return InkWell(
+      borderRadius: BorderRadius.circular(14),
+      onTap: onTap,
+      child: Container(
+        padding: const EdgeInsets.all(16),
+        decoration: ShapeDecoration(
+          color: selected ? Colors.white.withOpacity(0.04) : Colors.transparent,
+          shape: RoundedRectangleBorder(
+            side: BorderSide(color: borderColor, width: 2),
+            borderRadius: BorderRadius.circular(14),
+          ),
+        ),
+        child: Row(
+          children: [
+            // Title + subtitle
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(title,
+                      style: const TextStyle(
+                          color: Colors.white,
+                          fontSize: 18,
+                          fontWeight: FontWeight.w700)),
+                  const SizedBox(height: 2),
+                  Text(subtitle,
+                      style: TextStyle(
+                          color: Colors.white.withOpacity(0.7), fontSize: 14)),
+                ],
+              ),
+            ),
+            if (chipText != null) ...[
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                decoration: BoxDecoration(
+                    color: _PURPLE, borderRadius: BorderRadius.circular(6)),
+                child: Text(chipText!,
+                    style: const TextStyle(
+                        color: Colors.white, fontSize: 12, height: 1)),
+              ),
+              const SizedBox(width: 10),
+            ],
+            Icon(selected ? Icons.check_circle : Icons.circle_outlined,
+                color: selected ? _PURPLE : Colors.grey, size: 24),
+          ],
+        ),
+      ),
+    );
+  }
+}
