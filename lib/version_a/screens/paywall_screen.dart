@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import 'package:url_launcher/url_launcher.dart';
 import 'package:purchases_flutter/purchases_flutter.dart';
 import '../../core/constants/app_colors.dart';
+import '../../core/services/paywall_config_service.dart';
 import 'home_screen.dart';
 
 enum Plan { lifetime, weekly }
@@ -306,45 +307,47 @@ class _PaywallScreenState extends State<PaywallScreen>
 
                   const SizedBox(height: 20),
 
-                  // Plans
+                  // Plans (v1 = hardcoded, v2 = from remote JSON, read at app start)
                   _PlanCard(
-                    title: 'Lifetime Plan',
-                    subtitle: '\$14.99 for lifetime access',
+                    title: PaywallConfigService.version == 'v2' ? PaywallConfigService.v2LifetimeTitle : 'Lifetime Plan',
+                    subtitle: PaywallConfigService.version == 'v2' ? PaywallConfigService.v2LifetimeSubtitle : '\$14.99 for lifetime access',
                     selected: selected == Plan.lifetime,
-                    chipText: 'SAVE 90%',
+                    chipText: PaywallConfigService.version == 'v2' ? PaywallConfigService.v2LifetimeChipText : 'SAVE 90%',
                     onTap: () => setState(() => selected = Plan.lifetime),
                   ),
                   const SizedBox(height: 12),
                   _PlanCard(
-                    title: '3-Day Trial',
+                    title: PaywallConfigService.version == 'v2' ? PaywallConfigService.v2WeeklyTitle : '3-Day Trial',
                     subtitle: _subPackage != null
                         ? 'then ${_subPackage!.storeProduct.priceString} per week'
-                        : 'then \$4.99 per week',
+                        : (PaywallConfigService.version == 'v2' ? PaywallConfigService.v2WeeklySubtitleFallback : 'then \$4.99 per week'),
                     selected: selected == Plan.weekly,
                     onTap: () => setState(() => selected = Plan.weekly),
                   ),
 
-                  const SizedBox(height: 12),
-                  Container(
-                    decoration: BoxDecoration(
-                      color: Colors.white.withOpacity(0.08),
-                      borderRadius: BorderRadius.circular(12),
-                    ),
-                    child: SwitchListTile.adaptive(
-                      value: isWeekly,
-                      onChanged: (val) {
-                        setState(() {
-                          selected = val ? Plan.weekly : Plan.lifetime;
-                        });
-                      },
-                      title: const Text(
-                        'Free Trial Enabled',
-                        style: TextStyle(color: Colors.white, fontSize: 16),
+                  if (PaywallConfigService.showFreeTrialToggle) ...[
+                    const SizedBox(height: 12),
+                    Container(
+                      decoration: BoxDecoration(
+                        color: Colors.white.withOpacity(0.08),
+                        borderRadius: BorderRadius.circular(12),
                       ),
-                      contentPadding:
-                          const EdgeInsets.symmetric(horizontal: 16),
+                      child: SwitchListTile.adaptive(
+                        value: isWeekly,
+                        onChanged: (val) {
+                          setState(() {
+                            selected = val ? Plan.weekly : Plan.lifetime;
+                          });
+                        },
+                        title: const Text(
+                          'Free Trial Enabled',
+                          style: TextStyle(color: Colors.white, fontSize: 16),
+                        ),
+                        contentPadding:
+                            const EdgeInsets.symmetric(horizontal: 16),
+                      ),
                     ),
-                  ),
+                  ],
 
                   const SizedBox(height: 20),
                   SizedBox(
@@ -363,7 +366,9 @@ class _PaywallScreenState extends State<PaywallScreen>
                         mainAxisAlignment: MainAxisAlignment.center,
                         children: [
                           Text(
-                            selected == Plan.lifetime ? 'Unlock Now' : 'Start Free Trial',
+                            selected == Plan.lifetime
+                              ? (PaywallConfigService.version == 'v2' ? PaywallConfigService.v2LifetimeButtonText : 'Unlock Now')
+                              : (PaywallConfigService.version == 'v2' ? PaywallConfigService.v2WeeklyButtonText : 'Start Free Trial'),
                             style: const TextStyle(
                                 fontSize: 18, fontWeight: FontWeight.w600),
                           ),

@@ -1,0 +1,13 @@
+{
+  "version": "v1",
+  "showFreeTrialToggle": true,
+  "v2": {
+    "lifetimeTitle": "Lifetime Plan",
+    "lifetimeSubtitle": "$14.99 for lifetime access",
+    "lifetimeChipText": "SAVE 90%",
+    "weeklyTitle": "3-Day Trial",
+    "weeklySubtitleFallback": "then $4.99 per week",
+    "lifetimeButtonText": "Unlock Now",
+    "weeklyButtonText": "Start Free Trial"
+  }
+}
