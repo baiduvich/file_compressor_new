@@ -329,7 +329,7 @@ packages:
     source: hosted
     version: "6.3.3"
   http:
-    dependency: transitive
+    dependency: "direct main"
     description:
       name: http
       sha256: "87721a4a50b19c7f1d49001e51409bddc46303966ce89a65af4f4e6004896412"
@@ -576,14 +576,6 @@ packages:
       url: "https://pub.dev"
     source: hosted
     version: "2.3.0"
-  pdf_compressor_pro:
-    dependency: "direct main"
-    description:
-      name: pdf_compressor_pro
-      sha256: "30c92c43bd86db44aeabaca65053d2f078786f36e39b882d942480bd84de8a51"
-      url: "https://pub.dev"
-    source: hosted
-    version: "0.1.2"
   permission_handler:
     dependency: "direct main"
     description:
