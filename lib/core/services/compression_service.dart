@@ -5,10 +5,14 @@ import '../../version_a/models/file_info.dart';
 import '../../version_a/models/compression_options.dart';
 import 'smart_compression_service.dart';
 import 'pdf_compression_service.dart';
+import 'audio_compression_service.dart';
+import 'office_compression_service.dart';
 
 class CompressionService {
   final _smartService = SmartCompressionService();
   final _pdfService = PdfCompressionService();
+  final _audioService = AudioCompressionService();
+  final _officeService = OfficeCompressionService();
 
   // Compress multiple files into one bundled ZIP
   Future<FileInfo> compressFilesIntoBundledZip({
@@ -20,89 +24,58 @@ class CompressionService {
     try {
       final archive = Archive();
       int totalOriginalSize = 0;
-      
       final tempDir = path.dirname(outputPath);
 
-      // Add all files to the archive
       for (int i = 0; i < files.length; i++) {
         final fileInfo = files[i];
         final file = File(fileInfo.path);
         if (!await file.exists()) continue;
-        
+
         String entryName = fileInfo.name;
         List<int> bytes;
 
-        // Try to compress the file first (Compress THEN Zip logic)
-        FileInfo? processed;
-        
-        // We attempt compression if it's a supported type, regardless of preset
-        // mimicking the "individual compression" behavior the user liked
-        if (_smartService.isImage(fileInfo.path)) {
-           processed = await _smartService.compressImage(fileInfo: fileInfo, outputDirectory: tempDir, preset: preset);
-        } else if (_smartService.isVideo(fileInfo.path)) {
-           processed = await _smartService.compressVideo(fileInfo: fileInfo, outputDirectory: tempDir, preset: preset);
-        } else if (fileInfo.path.toLowerCase().endsWith('.pdf')) {
-           processed = await _pdfService.compressPdf(fileInfo, tempDir, preset);
-        }
-        
-        if (processed != null && processed.path != fileInfo.path) {
-           // Compressed successfully to a temp file
-           final pFile = File(processed.path);
-           if (await pFile.exists()) {
-             bytes = await pFile.readAsBytes();
-             // Use original name + new extension for clean entry name
-             final ext = path.extension(processed.path);
-             final originalBase = path.basenameWithoutExtension(fileInfo.name);
-             entryName = '$originalBase$ext'; 
-             
-             // Cleanup temp file immediately after reading
-             try { await pFile.delete(); } catch (_) {} 
-           } else {
-             // Fallback if temp file missing
-             bytes = await file.readAsBytes();
-           }
+        FileInfo? processed = await _compressIndividualFile(fileInfo, tempDir, preset);
+
+        if (processed != null &&
+            processed.compressedPath != null &&
+            processed.compressedPath != fileInfo.path) {
+          final pFile = File(processed.compressedPath!);
+          if (await pFile.exists()) {
+            bytes = await pFile.readAsBytes();
+            final ext = path.extension(processed.compressedPath!);
+            final originalBase = path.basenameWithoutExtension(fileInfo.name);
+            entryName = '$originalBase$ext';
+            try {
+              await pFile.delete();
+            } catch (_) {}
+          } else {
+            bytes = await file.readAsBytes();
+          }
         } else {
-           // No compression or failed, use original
-           bytes = await file.readAsBytes();
+          bytes = await file.readAsBytes();
         }
 
-        totalOriginalSize += bytes.length; 
-        
-        final archiveFile = ArchiveFile(
-          entryName,
-          bytes.length,
-          bytes,
-        );
-        archive.addFile(archiveFile);
-        
+        totalOriginalSize += bytes.length;
+        archive.addFile(ArchiveFile(entryName, bytes.length, bytes));
         onProgress?.call((i + 1) / files.length * 0.8);
       }
-      
-      // Encode to ZIP
-      int zipLevel = Deflate.BEST_COMPRESSION;
-      if (preset == CompressionPreset.smart) zipLevel = 6;
-      if (preset == CompressionPreset.highQuality) zipLevel = 0; 
+
+      int zipLevel = 6;
+      if (preset == CompressionPreset.highQuality) zipLevel = 0;
       if (preset == CompressionPreset.maxCompression) zipLevel = 9;
 
-      final zipEncoder = ZipEncoder();
-      final zipData = zipEncoder.encode(archive, level: zipLevel);
-      
-      if (zipData == null) {
-        throw Exception('Failed to create ZIP archive');
-      }
-      
+      final zipData = ZipEncoder().encode(archive, level: zipLevel);
+      if (zipData == null) throw Exception('Failed to create ZIP archive');
+
       onProgress?.call(0.9);
-      
       final outputFile = File(outputPath);
       await outputFile.writeAsBytes(zipData);
       onProgress?.call(1.0);
-      
+
       return FileInfo(
         name: path.basename(outputPath),
         path: outputPath,
-        sizeInBytes: totalOriginalSize, // This might be misleading, ideally sum of ORIGINAL input files?
-        // But for "space saved" stats, we usually compare final vs initial. 
-        // Here specific logic for stats might be needed elsewhere, but let's stick to this.
+        sizeInBytes: totalOriginalSize,
         compressedPath: outputPath,
         compressedSizeInBytes: zipData.length,
         dateAdded: DateTime.now(),
@@ -111,8 +84,8 @@ class CompressionService {
       throw Exception('Bundled compression failed: $e');
     }
   }
-  
-  // Compress a single file individually
+
+  // Compress a single file individually — routes to the right engine
   Future<FileInfo> compressSingleFile({
     required FileInfo fileInfo,
     required String outputPath,
@@ -120,136 +93,151 @@ class CompressionService {
     void Function(double progress)? onProgress,
   }) async {
     try {
-      final lowerPath = fileInfo.path.toLowerCase();
-      final parentDir = path.dirname(outputPath); // Use parent of target output for temp/sidecars
+      final parentDir = path.dirname(outputPath);
+      final result = await _compressIndividualFile(fileInfo, parentDir, preset);
+      if (result != null) return result;
 
-      // 1. PDF Compression
-      if (lowerPath.endsWith('.pdf')) {
-        return await _pdfService.compressPdf(fileInfo, parentDir, preset);
-      }
-      
-      // 2. Image Compression
-      if (_smartService.isImage(fileInfo.path)) {
-        return await _smartService.compressImage(fileInfo: fileInfo, outputDirectory: parentDir, preset: preset);
-      }
-      
-      // 3. Video Compression
-      if (_smartService.isVideo(fileInfo.path)) {
-        return await _smartService.compressVideo(fileInfo: fileInfo, outputDirectory: parentDir, preset: preset);
-      }
-
-      // 4. Fallback to ZIP (Standard)
+      // Fallback: ZIP for unsupported types
       return await _zipFile(
-        fileInfo: fileInfo, 
-        outputPath: outputPath, 
-        preset: preset, 
-        onProgress: onProgress
+        fileInfo: fileInfo,
+        outputPath: outputPath,
+        preset: preset,
+        onProgress: onProgress,
       );
-
     } catch (e) {
       throw Exception('Compression failed: $e');
     }
   }
 
-  // Internal helper for actual Zipping of single file
+  // Core routing logic — returns null if file type not recognised
+  Future<FileInfo?> _compressIndividualFile(
+    FileInfo fileInfo,
+    String outputDirectory,
+    CompressionPreset preset,
+  ) async {
+    final lowerPath = fileInfo.path.toLowerCase();
+
+    // PDF
+    if (lowerPath.endsWith('.pdf')) {
+      print('[PDF] Routing to PDF compression: ${fileInfo.name} (${fileInfo.sizeInBytes} bytes), preset=$preset');
+      final result = await _pdfService.compressPdf(fileInfo, outputDirectory, preset);
+      print('[PDF] PDF compression result: ${result.name}, compressed=${result.compressedPath != null && result.compressedPath != fileInfo.path}');
+      return result;
+    }
+
+    // Images (JPEG, PNG, HEIC, WebP)
+    if (_smartService.isImage(fileInfo.path)) {
+      return await _smartService.compressImage(
+        fileInfo: fileInfo,
+        outputDirectory: outputDirectory,
+        preset: preset,
+      );
+    }
+
+    // Videos (MP4, MOV, AVI, MKV, M4V)
+    if (_smartService.isVideo(fileInfo.path)) {
+      return await _smartService.compressVideo(
+        fileInfo: fileInfo,
+        outputDirectory: outputDirectory,
+        preset: preset,
+      );
+    }
+
+    // Audio (WAV, AIFF, MP3, FLAC, M4A, AAC)
+    if (_audioService.isAudio(fileInfo.path)) {
+      return await _audioService.compressAudio(
+        fileInfo: fileInfo,
+        outputDirectory: outputDirectory,
+        preset: preset,
+      );
+    }
+
+    // Office documents (DOCX, PPTX, XLSX)
+    if (_officeService.isOfficeFile(fileInfo.path)) {
+      return await _officeService.compressOffice(
+        fileInfo: fileInfo,
+        outputDirectory: outputDirectory,
+        preset: preset,
+      );
+    }
+
+    return null; // Unknown type — caller handles ZIP fallback
+  }
+
   Future<FileInfo> _zipFile({
     required FileInfo fileInfo,
     required String outputPath,
     required CompressionPreset preset,
     void Function(double progress)? onProgress,
   }) async {
-      final file = File(fileInfo.path);
-      if (!await file.exists()) {
-        throw Exception('File not found: ${fileInfo.path}');
-      }
-      
-      final bytes = await file.readAsBytes();
-      onProgress?.call(0.3);
-      
-      final archive = Archive();
-      final archiveFile = ArchiveFile(
-        fileInfo.name,
-        bytes.length,
-        bytes,
-      );
-      archive.addFile(archiveFile);
-      onProgress?.call(0.6);
-      
-      int zipLevel = Deflate.BEST_COMPRESSION;
-      if (preset == CompressionPreset.smart) zipLevel = 6;
-      if (preset == CompressionPreset.highQuality) zipLevel = 0; 
-      if (preset == CompressionPreset.maxCompression) zipLevel = 9;
+    final file = File(fileInfo.path);
+    if (!await file.exists()) {
+      throw Exception('File not found: ${fileInfo.path}');
+    }
 
-      final zipEncoder = ZipEncoder();
-      final zipData = zipEncoder.encode(archive, level: zipLevel);
-      
-      if (zipData == null) {
-        throw Exception('Failed to create ZIP archive');
-      }
-      
-      onProgress?.call(0.8);
-      
-      final outputFile = File(outputPath);
-      await outputFile.writeAsBytes(zipData);
-      onProgress?.call(1.0);
-      
-      return FileInfo(
-        name: path.basename(outputPath),
-        path: outputPath,
-        sizeInBytes: bytes.length,
-        compressedPath: outputPath,
-        compressedSizeInBytes: zipData.length,
-        dateAdded: DateTime.now(),
-      );
+    final bytes = await file.readAsBytes();
+    onProgress?.call(0.3);
+
+    final archive = Archive();
+    archive.addFile(ArchiveFile(fileInfo.name, bytes.length, bytes));
+    onProgress?.call(0.6);
+
+    int zipLevel = 6;
+    if (preset == CompressionPreset.highQuality) zipLevel = 0;
+    if (preset == CompressionPreset.maxCompression) zipLevel = 9;
+
+    final zipData = ZipEncoder().encode(archive, level: zipLevel);
+    if (zipData == null) throw Exception('Failed to create ZIP archive');
+
+    onProgress?.call(0.8);
+    await File(outputPath).writeAsBytes(zipData);
+    onProgress?.call(1.0);
+
+    return FileInfo(
+      name: path.basename(outputPath),
+      path: outputPath,
+      sizeInBytes: bytes.length,
+      compressedPath: outputPath,
+      compressedSizeInBytes: zipData.length,
+      dateAdded: DateTime.now(),
+    );
   }
-  
-  // Compress files based on mode (bundled or individual)
+
+  // Top-level entry point: handles both bundled and individual compression
   Future<List<FileInfo>> compressFiles({
     required List<FileInfo> files,
     required String outputDirectory,
     CompressionPreset preset = CompressionPreset.smart,
-    bool bundleFiles = false, 
+    bool bundleFiles = false,
     void Function(int currentIndex, int total, double fileProgress)? onProgress,
   }) async {
     if (bundleFiles) {
       final timestamp = DateTime.now().millisecondsSinceEpoch;
       final outputPath = '$outputDirectory/archive_$timestamp.zip';
-      
       final bundledFile = await compressFilesIntoBundledZip(
         files: files,
         outputPath: outputPath,
         preset: preset,
-        onProgress: (progress) {
-          onProgress?.call(0, 1, progress);
-        },
+        onProgress: (progress) => onProgress?.call(0, 1, progress),
       );
-      
       return [bundledFile];
-    } else {
-      final compressedFiles = <FileInfo>[];
-      
-      for (int i = 0; i < files.length; i++) {
-        final fileInfo = files[i];
-        final fileName = path.basenameWithoutExtension(fileInfo.name);
-        final timestamp = DateTime.now().millisecondsSinceEpoch;
-        
-        // Default extension, compressSingleFile might return something else (.mp4/.jpg)
-        // We pass a .zip path as default target if zipping occurs
-        final outputPath = '$outputDirectory/${fileName}_compressed_$timestamp.zip'; 
-        
-        final compressed = await compressSingleFile(
-          fileInfo: fileInfo,
-          outputPath: outputPath,
-          preset: preset,
-          onProgress: (progress) {
-            onProgress?.call(i, files.length, progress);
-          },
-        );
-        
-        compressedFiles.add(compressed);
-      }
-      
-      return compressedFiles;
     }
+
+    final compressedFiles = <FileInfo>[];
+    for (int i = 0; i < files.length; i++) {
+      final fileInfo = files[i];
+      final fileName = path.basenameWithoutExtension(fileInfo.name);
+      final timestamp = DateTime.now().millisecondsSinceEpoch;
+      final outputPath = '$outputDirectory/${fileName}_compressed_$timestamp.zip';
+
+      final compressed = await compressSingleFile(
+        fileInfo: fileInfo,
+        outputPath: outputPath,
+        preset: preset,
+        onProgress: (progress) => onProgress?.call(i, files.length, progress),
+      );
+      compressedFiles.add(compressed);
+    }
+    return compressedFiles;
   }
 }

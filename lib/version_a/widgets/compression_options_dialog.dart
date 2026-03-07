@@ -24,11 +24,11 @@ class _CompressionOptionsDialogState extends State<CompressionOptionsDialog> {
         width: double.infinity,
         padding: const EdgeInsets.all(24),
         decoration: BoxDecoration(
-          color: AppColors.surfaceDark, // Fixed: Force Dark Background
+          color: AppColors.surfaceDark,
           borderRadius: BorderRadius.circular(24),
           boxShadow: [
             BoxShadow(
-              color: Colors.black.withOpacity(0.3), // Darker shadow
+              color: Colors.black.withOpacity(0.3),
               blurRadius: 20,
               offset: const Offset(0, 10),
             ),
@@ -43,52 +43,57 @@ class _CompressionOptionsDialogState extends State<CompressionOptionsDialog> {
               style: TextStyle(
                 fontSize: 24,
                 fontWeight: FontWeight.bold,
-                color: AppColors.textPrimaryDark, // Fixed: Light text
+                color: AppColors.textPrimaryDark,
               ),
             ),
-            const SizedBox(height: 24),
-            
-            // Preset Selection (3 Cards)
+            const SizedBox(height: 6),
+            const Text(
+              'Images convert to WebP • Audio converts to AAC',
+              style: TextStyle(fontSize: 12, color: AppColors.textSecondaryDark),
+            ),
+            const SizedBox(height: 20),
+
             ...CompressionPreset.values.map((preset) => _buildPresetCard(preset)),
-            
+
             const SizedBox(height: 16),
-            
-            // Archive Toggle
+
             SwitchListTile.adaptive(
-              title: const Text('Create a ZIP File', style: TextStyle(fontWeight: FontWeight.w600, color: AppColors.textPrimaryDark)),
-              subtitle: const Text('Useful for sharing multiple files', style: TextStyle(color: AppColors.textSecondaryDark)),
+              title: const Text('Create a ZIP File',
+                  style: TextStyle(fontWeight: FontWeight.w600, color: AppColors.textPrimaryDark)),
+              subtitle: const Text('Bundle multiple files into one archive',
+                  style: TextStyle(color: AppColors.textSecondaryDark, fontSize: 12)),
               value: _bundleFiles,
               activeColor: AppColors.primary,
               contentPadding: EdgeInsets.zero,
               onChanged: (val) => setState(() => _bundleFiles = val),
             ),
-            
-            const SizedBox(height: 12),
-            
-            // Bulk Conversion Toggle
+
+            const SizedBox(height: 8),
+
             SwitchListTile.adaptive(
-              title: const Text('Bulk Conversion', style: TextStyle(fontWeight: FontWeight.w600, color: AppColors.textPrimaryDark)),
-              subtitle: const Text('Process all files in one batch operation', style: TextStyle(color: AppColors.textSecondaryDark)),
+              title: const Text('Bulk Conversion',
+                  style: TextStyle(fontWeight: FontWeight.w600, color: AppColors.textPrimaryDark)),
+              subtitle: const Text('Process all selected files in one batch',
+                  style: TextStyle(color: AppColors.textSecondaryDark, fontSize: 12)),
               value: _bulkConversion,
               activeColor: AppColors.primary,
               contentPadding: EdgeInsets.zero,
               onChanged: (val) => setState(() => _bulkConversion = val),
             ),
 
-            const SizedBox(height: 24),
-            
-            // Privacy Note
+            const SizedBox(height: 20),
+
             Container(
               padding: const EdgeInsets.all(12),
               decoration: BoxDecoration(
-                color: AppColors.backgroundDark, // Fixed: Dark background
+                color: AppColors.backgroundDark,
                 borderRadius: BorderRadius.circular(12),
               ),
-              child: Row(
+              child: const Row(
                 children: [
-                  const Icon(Icons.shield_outlined, size: 20, color: AppColors.success),
-                  const SizedBox(width: 12),
-                  const Expanded(
+                  Icon(Icons.shield_outlined, size: 20, color: AppColors.success),
+                  SizedBox(width: 12),
+                  Expanded(
                     child: Text(
                       'All compression happens on-device. Your files never leave this phone.',
                       style: TextStyle(fontSize: 12, color: AppColors.textSecondaryDark),
@@ -97,10 +102,9 @@ class _CompressionOptionsDialogState extends State<CompressionOptionsDialog> {
                 ],
               ),
             ),
-            
+
             const SizedBox(height: 24),
-            
-            // Compress Button
+
             SizedBox(
               width: double.infinity,
               height: 56,
@@ -122,10 +126,7 @@ class _CompressionOptionsDialogState extends State<CompressionOptionsDialog> {
                 ),
                 child: const Text(
                   'Start Compression',
-                  style: TextStyle(
-                    fontSize: 18,
-                    fontWeight: FontWeight.bold,
-                  ),
+                  style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
                 ),
               ),
             ),
@@ -137,38 +138,49 @@ class _CompressionOptionsDialogState extends State<CompressionOptionsDialog> {
 
   Widget _buildPresetCard(CompressionPreset preset) {
     final isSelected = _selectedPreset == preset;
-    
+
     IconData icon;
+    Color accentColor;
     switch (preset) {
-      case CompressionPreset.smart: icon = Icons.auto_awesome; break;
-      case CompressionPreset.highQuality: icon = Icons.high_quality; break;
-      case CompressionPreset.maxCompression: icon = Icons.compress; break;
+      case CompressionPreset.smart:
+        icon = Icons.auto_awesome;
+        accentColor = AppColors.primary;
+        break;
+      case CompressionPreset.highQuality:
+        icon = Icons.high_quality;
+        accentColor = const Color(0xFF4CAF50);
+        break;
+      case CompressionPreset.maxCompression:
+        icon = Icons.compress;
+        accentColor = const Color(0xFFFF9800);
+        break;
     }
-  
+
     return GestureDetector(
       onTap: () => setState(() => _selectedPreset = preset),
       child: Container(
-        margin: const EdgeInsets.only(bottom: 12),
-        padding: const EdgeInsets.all(16),
+        margin: const EdgeInsets.only(bottom: 10),
+        padding: const EdgeInsets.all(14),
         decoration: BoxDecoration(
-          color: isSelected ? AppColors.primary.withOpacity(0.15) : AppColors.backgroundDark,
+          color: isSelected ? accentColor.withOpacity(0.12) : AppColors.backgroundDark,
           borderRadius: BorderRadius.circular(16),
           border: Border.all(
-            color: isSelected ? AppColors.primary : Colors.transparent,
+            color: isSelected ? accentColor : Colors.transparent,
             width: 2,
           ),
         ),
         child: Row(
           children: [
             Container(
-              padding: const EdgeInsets.all(10),
+              padding: const EdgeInsets.all(9),
               decoration: BoxDecoration(
-                color: isSelected ? AppColors.primary : AppColors.surfaceDark,
+                color: isSelected ? accentColor : AppColors.surfaceDark,
                 shape: BoxShape.circle,
               ),
-              child: Icon(icon, color: isSelected ? Colors.white : AppColors.textSecondaryDark, size: 24),
+              child: Icon(icon,
+                  color: isSelected ? Colors.white : AppColors.textSecondaryDark, size: 22),
             ),
-            const SizedBox(width: 16),
+            const SizedBox(width: 14),
             Expanded(
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
@@ -176,24 +188,30 @@ class _CompressionOptionsDialogState extends State<CompressionOptionsDialog> {
                   Text(
                     preset.name,
                     style: TextStyle(
-                      fontSize: 16,
+                      fontSize: 15,
                       fontWeight: FontWeight.bold,
-                      color: isSelected ? AppColors.primary : AppColors.textPrimaryDark,
+                      color: isSelected ? accentColor : AppColors.textPrimaryDark,
                     ),
                   ),
-                  const SizedBox(height: 4),
+                  const SizedBox(height: 2),
                   Text(
                     preset.description,
+                    style: const TextStyle(fontSize: 11, color: AppColors.textSecondaryDark),
+                  ),
+                  const SizedBox(height: 3),
+                  Text(
+                    preset.expectedSavings,
                     style: TextStyle(
-                      fontSize: 12,
-                      color: AppColors.textSecondaryDark,
+                      fontSize: 11,
+                      fontWeight: FontWeight.w600,
+                      color: isSelected ? accentColor : AppColors.success,
                     ),
                   ),
                 ],
               ),
             ),
-            if (isSelected) 
-              const Icon(Icons.check_circle, color: AppColors.primary),
+            if (isSelected)
+              Icon(Icons.check_circle, color: accentColor, size: 22),
           ],
         ),
       ),

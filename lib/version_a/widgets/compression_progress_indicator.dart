@@ -40,6 +40,7 @@ class _CompressionProgressIndicatorState extends State<CompressionProgressIndica
   Widget build(BuildContext context) {
     return Column(
       mainAxisSize: MainAxisSize.min,
+      crossAxisAlignment: CrossAxisAlignment.center,
       children: [
         SizedBox(
           width: 200,
@@ -86,9 +87,9 @@ class _CompressionProgressIndicatorState extends State<CompressionProgressIndica
                     )
                     .animate(onPlay: (controller) => controller.repeat())
                     .rotate(duration: 2000.ms, curve: Curves.easeInOut),
-                    
+
                     const SizedBox(height: 12),
-                    
+
                     Text(
                       'Processing...',
                       textAlign: TextAlign.center,
@@ -123,29 +124,26 @@ class _CompressionProgressIndicatorState extends State<CompressionProgressIndica
                       ),
                     ),
                   ],
-                  
-                  if (widget.statusText != null) ...[
-                    const SizedBox(height: 16),
-                    Padding(
-                      padding: const EdgeInsets.symmetric(horizontal: 24),
-                      child: Text(
-                        widget.statusText!,
-                        textAlign: TextAlign.center,
-                        maxLines: 3,
-                        overflow: TextOverflow.ellipsis,
-                        style: const TextStyle(
-                          fontSize: 14,
-                          color: AppColors.textSecondary,
-                          height: 1.4,
-                        ),
-                      ),
-                    ),
-                  ],
                 ],
               ),
             ],
           ),
         ),
+
+        if (widget.statusText != null) ...[
+          const SizedBox(height: 24),
+          Text(
+            widget.statusText!,
+            textAlign: TextAlign.center,
+            maxLines: 3,
+            overflow: TextOverflow.ellipsis,
+            style: const TextStyle(
+              fontSize: 14,
+              color: AppColors.textSecondary,
+              height: 1.4,
+            ),
+          ),
+        ],
       ],
     );
   }

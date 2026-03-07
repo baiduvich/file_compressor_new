@@ -1,9 +1,13 @@
+import 'dart:async';
 import 'package:flutter/material.dart';
-import '../helpers/paywall_copy_helper.dart';
+import 'package:flutter/services.dart';
+import 'package:in_app_review/in_app_review.dart';
+import 'package:video_player/video_player.dart';
 import '../../core/constants/app_colors.dart';
 import 'paywall_screen.dart';
-import 'proof_screen.dart';
 
+/// Onboarding flow: 3 screens (title → video placeholder → text → Next), then paywall.
+/// Review prompt on screen 2. Video areas left empty for you to add assets.
 class OnboardingScreen extends StatefulWidget {
   const OnboardingScreen({super.key});
 
@@ -12,498 +16,455 @@ class OnboardingScreen extends StatefulWidget {
 }
 
 class _OnboardingScreenState extends State<OnboardingScreen> {
-  int _currentIndex = 0;
+  final PageController _pageController = PageController();
+  final InAppReview _inAppReview = InAppReview.instance;
+  int _currentPage = 0;
+  bool _reviewRequested = false;
+  int? _nextCooldownSeconds;
+  Timer? _nextCooldownTimer;
 
-  // Selections
-  FileTypeOption? _selectedType;
-  UseCaseOption? _selectedUseCase;
-  PriorityOption? _selectedPriority;
+  static const String _video3Asset = 'assets/videos/video3.mov';
 
-  void _nextPage() {
-    if (_currentIndex == 0) {
-      _showSelectionProofScreen();
-      return;
-    }
-
-    if (_currentIndex == 1) {
+  @override
+  void initState() {
+    super.initState();
+    _nextCooldownSeconds = 3;
+    _nextCooldownTimer = Timer.periodic(const Duration(seconds: 1), (_) {
+      if (!mounted) return;
       setState(() {
-        _currentIndex = 2;
+        if (_nextCooldownSeconds == null || _nextCooldownSeconds! <= 0) {
+          _nextCooldownTimer?.cancel();
+          _nextCooldownTimer = null;
+          _nextCooldownSeconds = null;
+          return;
+        }
+        _nextCooldownSeconds = _nextCooldownSeconds! - 1;
+        if (_nextCooldownSeconds == 0) {
+          _nextCooldownSeconds = null;
+          _nextCooldownTimer?.cancel();
+          _nextCooldownTimer = null;
+        }
       });
-      return;
+    });
+  }
+
+  @override
+  void dispose() {
+    _nextCooldownTimer?.cancel();
+    _pageController.dispose();
+    super.dispose();
+  }
+
+  static const String _reviewPromptAsset =
+      'assets/prompt_manager/review_asking.txt';
+
+  Future<String?> _loadReviewPromptText() async {
+    try {
+      return await rootBundle.loadString(_reviewPromptAsset);
+    } catch (_) {
+      return null;
     }
-
-    // After last onboarding, show proof screen before paywall
-    _showFinalProofScreen();
   }
 
-  void _showSelectionProofScreen() {
-    if (_selectedType == null) return;
-
-    final List<String> imagePaths;
-    final String fileTypeName;
-
-    switch (_selectedType!) {
-      case FileTypeOption.pdf:
-        imagePaths = ['assets/images/proof1_pdf.jpg'];
-        fileTypeName = 'PDF';
-        break;
-      case FileTypeOption.documents:
-        imagePaths = ['assets/images/proof1_pdf.jpg'];
-        fileTypeName = 'Documents';
-        break;
-      case FileTypeOption.images:
-        imagePaths = ['assets/images/proof1_jpg.jpg'];
-        fileTypeName = 'Images';
-        break;
-      case FileTypeOption.videos:
-        imagePaths = ['assets/images/proof1_mp4.jpg'];
-        fileTypeName = 'Videos';
-        break;
-      case FileTypeOption.all:
-        imagePaths = [
-          'assets/images/proof1_pdf.jpg',
-          'assets/images/proof1_mp4.jpg',
-          'assets/images/proof1_jpg.jpg',
-        ];
-        fileTypeName = 'All Files';
-        break;
-    }
-
-    Navigator.of(context).push(
-      MaterialPageRoute(
-        builder: (context) => ProofScreen(
-          titleSpan: TextSpan(
-            style: const TextStyle(fontSize: 28, height: 1.2),
-            children: [
-              const TextSpan(
-                text: 'Compress ',
-                style: TextStyle(
-                  color: Colors.white,
-                  fontWeight: FontWeight.normal,
-                ),
-              ),
-              TextSpan(
-                text: fileTypeName,
-                style: const TextStyle(
-                  color: Colors.yellow,
-                  fontWeight: FontWeight.bold,
-                ),
-              ),
-              const TextSpan(
-                text: ' Easily!',
-                style: TextStyle(
-                  color: Colors.white,
-                  fontWeight: FontWeight.normal,
-                ),
-              ),
-            ],
-          ),
-          imagePaths: imagePaths,
-          onNext: () {
-            Navigator.of(context).pop();
-            setState(() {
-              _currentIndex = 1;
-            });
-          },
-        ),
-      ),
-    );
-  }
-
-  void _showFinalProofScreen() {
-    Navigator.of(context).push(
-      MaterialPageRoute(
-        builder: (context) => ProofScreen(
-          title: "We got you covered!",
-          imagePaths: const ['assets/images/proof3.png'], // User will add this
-          titleColor: Colors.white,
-          onNext: () {
-            Navigator.of(context).pop();
-            _finishOnboarding();
-          },
-        ),
-      ),
-    );
-  }
-
-  Future<void> _finishOnboarding() async {
-    // Navigate to Paywall
+  Future<void> _maybeRequestReview() async {
+    if (_reviewRequested) return;
+    _reviewRequested = true;
+    final promptText = await _loadReviewPromptText();
     if (!mounted) return;
-    Navigator.of(context).pushReplacement(
-      MaterialPageRoute(
-        builder: (context) => const PaywallScreen(),
-      ),
-    );
+    if (promptText != null && promptText.trim().isNotEmpty) {
+      await showDialog<void>(
+        context: context,
+        builder: (context) => AlertDialog(
+          title: const Text('Rate us'),
+          content: SingleChildScrollView(
+            child: Text(promptText.trim()),
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(context),
+              child: const Text('Not now'),
+            ),
+            TextButton(
+              onPressed: () {
+                Navigator.pop(context);
+                _inAppReview.requestReview();
+              },
+              child: const Text('Rate us'),
+            ),
+          ],
+        ),
+      );
+    } else if (await _inAppReview.isAvailable()) {
+      await _inAppReview.requestReview();
+    }
+  }
+
+  Future<void> _onNext() async {
+    if (_currentPage < 2) {
+      if (_currentPage == 1) await _maybeRequestReview();
+      if (!mounted) return;
+      _pageController.nextPage(
+        duration: const Duration(milliseconds: 300),
+        curve: Curves.easeInOut,
+      );
+      setState(() => _currentPage++);
+    } else {
+      Navigator.of(context).pushReplacement(
+        MaterialPageRoute(builder: (_) => const PaywallScreen()),
+      );
+    }
   }
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: Colors.black, // Dark theme
+      backgroundColor: Theme.of(context).scaffoldBackgroundColor,
       body: SafeArea(
-        child: Padding(
-          padding: const EdgeInsets.all(24.0),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              // Progress Bar
-              Row(
-                children: List.generate(
-                  3,
-                  (index) => Expanded(
-                    child: Container(
-                      height: 4,
-                      margin: const EdgeInsets.symmetric(horizontal: 4),
-                      decoration: BoxDecoration(
-                        color: index <= _currentIndex
-                            ? AppColors.primary
-                            : Colors.grey[800],
-                        borderRadius: BorderRadius.circular(2),
-                      ),
-                    ),
-                  ),
+        child: Column(
+          children: [
+            Expanded(
+              child: PageView.builder(
+                controller: _pageController,
+                physics: const NeverScrollableScrollPhysics(),
+                itemCount: 3,
+                onPageChanged: (i) => setState(() => _currentPage = i),
+                itemBuilder: (context, index) => _OnboardingPage(
+                  pageIndex: index,
+                  video3Asset: _video3Asset,
                 ),
               ),
-              const SizedBox(height: 40),
-
-              Expanded(child: _buildCurrentPage()),
-
-              // Button
-              SizedBox(
+            ),
+            Padding(
+              padding: const EdgeInsets.fromLTRB(24, 16, 24, 24),
+              child: SizedBox(
                 width: double.infinity,
                 child: ElevatedButton(
-                  onPressed: _canProceed() ? _nextPage : null,
+                  onPressed: (_currentPage == 0 && _nextCooldownSeconds != null)
+                      ? null
+                      : _onNext,
                   style: ElevatedButton.styleFrom(
                     backgroundColor: AppColors.primary,
-                    disabledBackgroundColor: Colors.grey[800],
+                    foregroundColor: AppColors.textOnPrimary,
+                    disabledBackgroundColor: AppColors.primary.withOpacity(0.5),
+                    disabledForegroundColor: AppColors.textOnPrimary,
                     padding: const EdgeInsets.symmetric(vertical: 16),
                     shape: RoundedRectangleBorder(
                       borderRadius: BorderRadius.circular(12),
                     ),
                   ),
                   child: Text(
-                    _currentIndex == 2 ? 'Continue' : 'Next',
-                    style: const TextStyle(
-                      fontSize: 18,
-                      fontWeight: FontWeight.bold,
-                      color: Colors.white,
-                    ),
+                    _currentPage == 2
+                        ? 'Continue'
+                        : (_currentPage == 0 && _nextCooldownSeconds != null
+                            ? 'Next ($_nextCooldownSeconds)'
+                            : 'Next'),
                   ),
                 ),
               ),
-              const SizedBox(height: 20),
-            ],
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _OnboardingPage extends StatelessWidget {
+  const _OnboardingPage({
+    required this.pageIndex,
+    required this.video3Asset,
+  });
+
+  final int pageIndex;
+  final String video3Asset;
+
+  @override
+  Widget build(BuildContext context) {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    final textColor = isDark ? AppColors.textPrimaryDark : AppColors.textPrimary;
+
+    // Order: 0 = video (ex onboarding 3), 1 = image + EASILY (ex onboarding 1), 2 = slider + HIGH-QUALITY (ex onboarding 2)
+    if (pageIndex == 0) {
+      // Onboarding 1: video only
+      return Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 24),
+        child: Column(
+          children: [
+            Expanded(child: _OnboardingVideo(videoAsset: video3Asset)),
+          ],
+        ),
+      );
+    }
+
+    if (pageIndex == 1) {
+      // Onboarding 2: image + Compress files EASILY!
+      return Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 24),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            Expanded(
+              child: ClipRRect(
+                borderRadius: BorderRadius.circular(32),
+                child: Image.asset(
+                  'assets/images/onboarding1.png',
+                  fit: BoxFit.contain,
+                ),
+              ),
+            ),
+            const SizedBox(height: 24),
+            RichText(
+              textAlign: TextAlign.center,
+              text: TextSpan(
+                style: Theme.of(context).textTheme.titleLarge?.copyWith(
+                      color: textColor,
+                      fontSize: 22,
+                    ),
+                children: const [
+                  TextSpan(text: 'Compress files '),
+                  TextSpan(
+                    text: 'EASILY!',
+                    style: TextStyle(
+                      fontWeight: FontWeight.bold,
+                      fontSize: 26,
+                      color: Colors.amber,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ],
+        ),
+      );
+    }
+
+    // Onboarding 3: before/after slider + Keep HIGH-QUALITY!
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 24),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          const Expanded(child: _BeforeAfterComparisonSlider()),
+          const SizedBox(height: 24),
+          RichText(
+            textAlign: TextAlign.center,
+            text: TextSpan(
+              style: Theme.of(context).textTheme.titleLarge?.copyWith(
+                    color: textColor,
+                    fontSize: 22,
+                  ),
+              children: const [
+                TextSpan(text: 'Keep '),
+                TextSpan(
+                  text: 'HIGH-QUALITY!',
+                  style: TextStyle(
+                    fontWeight: FontWeight.bold,
+                    fontSize: 26,
+                    color: Colors.amber,
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+/// Plays an asset video in a rounded container. Loops and mutes by default.
+class _OnboardingVideo extends StatefulWidget {
+  const _OnboardingVideo({required this.videoAsset});
+
+  final String videoAsset;
+
+  @override
+  State<_OnboardingVideo> createState() => _OnboardingVideoState();
+}
+
+class _OnboardingVideoState extends State<_OnboardingVideo> {
+  late VideoPlayerController _controller;
+
+  @override
+  void initState() {
+    super.initState();
+    _controller = VideoPlayerController.asset(widget.videoAsset)
+      ..setLooping(true)
+      ..setVolume(0)
+      ..initialize().then((_) {
+        if (mounted) {
+          setState(() {});
+          _controller.play();
+        }
+      });
+  }
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return ClipRRect(
+      borderRadius: BorderRadius.circular(16),
+      child: _controller.value.isInitialized
+          ? SizedBox.expand(
+              child: FittedBox(
+                fit: BoxFit.cover,
+                child: SizedBox(
+                  width: _controller.value.size.width,
+                  height: _controller.value.size.height,
+                  child: VideoPlayer(_controller),
+                ),
+              ),
+            )
+          : const Center(child: CircularProgressIndicator()),
+    );
+  }
+}
+
+/// Interactive Before/After image comparison slider for Onboarding 2.
+/// State is managed within this widget.
+class _BeforeAfterComparisonSlider extends StatefulWidget {
+  const _BeforeAfterComparisonSlider();
+
+  static const double _handleWidth = 2;
+
+  @override
+  State<_BeforeAfterComparisonSlider> createState() =>
+      _BeforeAfterComparisonSliderState();
+}
+
+class _BeforeAfterComparisonSliderState
+    extends State<_BeforeAfterComparisonSlider> {
+  double _position = 0.5; // 0.0 = all compressed, 1.0 = all original
+
+  void _onHorizontalDragUpdate(DragUpdateDetails details) {
+    final box = context.findRenderObject() as RenderBox?;
+    if (box == null || !box.hasSize) return;
+    final local = box.globalToLocal(details.globalPosition);
+    final width = box.size.width;
+    if (width <= 0) return;
+    final t = (local.dx / width).clamp(0.0, 1.0);
+    setState(() => _position = t);
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final height = constraints.maxHeight;
+        return SizedBox(
+          height: height,
+          child: ClipRRect(
+            borderRadius: BorderRadius.circular(16),
+            child: LayoutBuilder(
+              builder: (context, innerConstraints) {
+                final w = innerConstraints.maxWidth;
+                final h = innerConstraints.maxHeight;
+            return GestureDetector(
+              behavior: HitTestBehavior.opaque,
+              onHorizontalDragUpdate: _onHorizontalDragUpdate,
+              child: Stack(
+                fit: StackFit.expand,
+                children: [
+                  // Bottom layer: Compressed (full width)
+                  Positioned.fill(
+                    child: Image.asset(
+                      'assets/images/onboarding2_2.png',
+                      fit: BoxFit.cover,
+                    ),
+                  ),
+                  // Top layer: Original (clipped by widthFactor)
+                  Positioned.fill(
+                    child: ClipRect(
+                      child: Align(
+                        alignment: Alignment.centerLeft,
+                        widthFactor: _position,
+                        child: SizedBox(
+                          width: w,
+                          height: h,
+                          child: Image.asset(
+                            'assets/images/onboarding2_1.png',
+                            fit: BoxFit.cover,
+                          ),
+                        ),
+                      ),
+                    ),
+                  ),
+                  // Data labels
+                  Positioned(
+                    left: 12,
+                    bottom: 12,
+                    child: _ComparisonLabel(
+                      text: 'Original (10 MB)',
+                      visible: _position > 0.15,
+                    ),
+                  ),
+                  Positioned(
+                    right: 12,
+                    bottom: 12,
+                    child: _ComparisonLabel(
+                      text: 'Compressed (1.2 MB)',
+                      visible: _position < 0.85,
+                    ),
+                  ),
+                  // Slider handle (2px white vertical line)
+                  Positioned(
+                    left: w * _position -
+                        _BeforeAfterComparisonSlider._handleWidth / 2,
+                    top: 0,
+                    bottom: 0,
+                    child: IgnorePointer(
+                      child: Center(
+                        child: Container(
+                          width: _BeforeAfterComparisonSlider._handleWidth,
+                          height: double.infinity,
+                          color: Colors.white,
+                        ),
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            );
+              },
+            ),
+          ),
+        );
+      },
+    );
+  }
+}
+
+class _ComparisonLabel extends StatelessWidget {
+  const _ComparisonLabel({required this.text, required this.visible});
+
+  final String text;
+  final bool visible;
+
+  @override
+  Widget build(BuildContext context) {
+    return AnimatedOpacity(
+      opacity: visible ? 1.0 : 0.35,
+      duration: const Duration(milliseconds: 120),
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+        decoration: BoxDecoration(
+          color: Colors.black54,
+          borderRadius: BorderRadius.circular(6),
+        ),
+        child: Text(
+          text,
+          style: const TextStyle(
+            color: Colors.white,
+            fontSize: 12,
+            fontWeight: FontWeight.w500,
           ),
         ),
       ),
     );
   }
-
-  bool _canProceed() {
-    if (_currentIndex == 0) return _selectedType != null;
-    if (_currentIndex == 1) return _selectedUseCase != null;
-    if (_currentIndex == 2) return _selectedPriority != null;
-    return false;
-  }
-
-  Widget _buildCurrentPage() {
-    switch (_currentIndex) {
-      case 0:
-        return _buildQuestion2Part(
-          "What do you ",
-          "compress the most?",
-          [
-          _Option(
-            "PDF",
-            FileTypeOption.pdf,
-            _selectedType == FileTypeOption.pdf,
-            Icons.picture_as_pdf,
-          ),
-          _Option(
-            "Images",
-            FileTypeOption.images,
-            _selectedType == FileTypeOption.images,
-            Icons.image,
-          ),
-          _Option(
-            "Videos",
-            FileTypeOption.videos,
-            _selectedType == FileTypeOption.videos,
-            Icons.videocam,
-          ),
-          _Option(
-            "Documents",
-            FileTypeOption.documents,
-            _selectedType == FileTypeOption.documents,
-            Icons.description,
-          ),
-          _Option(
-            "All Types",
-            FileTypeOption.all,
-            _selectedType == FileTypeOption.all,
-            Icons.folder,
-          ),
-          ],
-          (val) => setState(() => _selectedType = val),
-        );
-      case 1:
-        return _buildQuestion2Part(
-          "What's your ",
-          "main use case?",
-          [
-          _Option(
-            "Work",
-            UseCaseOption.work,
-            _selectedUseCase == UseCaseOption.work,
-            Icons.business,
-          ),
-          _Option(
-            "School",
-            UseCaseOption.school,
-            _selectedUseCase == UseCaseOption.school,
-            Icons.school,
-          ),
-          _Option(
-            "Personal Documents",
-            UseCaseOption.personal,
-            _selectedUseCase == UseCaseOption.personal,
-            Icons.person,
-          ),
-          ],
-          (val) => setState(() => _selectedUseCase = val),
-        );
-      case 2:
-        return _buildQuestion3Part(
-          "What matters ",
-          "THE MOST",
-          " to you?",
-          [
-          _Option(
-            "High Quality",
-            PriorityOption.highQuality,
-            _selectedPriority == PriorityOption.highQuality,
-            Icons.high_quality,
-          ),
-          _Option(
-            "Smallest File Size",
-            PriorityOption.smallestSize,
-            _selectedPriority == PriorityOption.smallestSize,
-            Icons.compress,
-          ),
-          _Option(
-            "Fast & Simple",
-            PriorityOption.fastSimple,
-            _selectedPriority == PriorityOption.fastSimple,
-            Icons.flash_on,
-          ),
-          ],
-          (val) => setState(() => _selectedPriority = val),
-        );
-      default:
-        return const SizedBox.shrink();
-    }
-  }
-
-  Widget _buildQuestion2Part<T>(
-    String prefix,
-    String highlight,
-    List<_Option<T>> options,
-    Function(T) onSelect,
-  ) {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        RichText(
-          text: TextSpan(
-            style: const TextStyle(fontSize: 28, height: 1.2),
-            children: [
-              TextSpan(
-                text: prefix,
-                style: const TextStyle(
-                  color: Colors.white,
-                  fontWeight: FontWeight.normal,
-                ),
-              ),
-              TextSpan(
-                text: highlight,
-                style: const TextStyle(
-                  color: Colors.yellow,
-                  fontWeight: FontWeight.bold,
-                ),
-              ),
-            ],
-          ),
-        ),
-        const SizedBox(height: 32),
-        ...options
-            .map(
-              (opt) => Padding(
-                padding: const EdgeInsets.only(bottom: 12),
-                child: InkWell(
-                  onTap: () => onSelect(opt.value),
-                  borderRadius: BorderRadius.circular(12),
-                  child: Container(
-                    padding: const EdgeInsets.symmetric(
-                      horizontal: 20,
-                      vertical: 16,
-                    ),
-                    decoration: BoxDecoration(
-                      color: opt.isSelected
-                          ? AppColors.primary.withOpacity(0.2)
-                          : Colors.grey[900],
-                      borderRadius: BorderRadius.circular(12),
-                      border: Border.all(
-                        color: opt.isSelected
-                            ? AppColors.primary
-                            : Colors.transparent,
-                        width: 2,
-                      ),
-                    ),
-                    child: Row(
-                      children: [
-                        Icon(
-                          opt.icon,
-                          color: opt.isSelected
-                              ? AppColors.primary
-                              : Colors.grey[400],
-                          size: 24,
-                        ),
-                        const SizedBox(width: 12),
-                        Expanded(
-                          child: Text(
-                            opt.label,
-                            style: const TextStyle(
-                              color: Colors.white,
-                              fontSize: 16,
-                              fontWeight: FontWeight.w500,
-                            ),
-                          ),
-                        ),
-                        if (opt.isSelected)
-                          const Icon(
-                            Icons.check_circle,
-                            color: AppColors.primary,
-                          )
-                        else
-                          Icon(Icons.circle_outlined, color: Colors.grey[600]),
-                      ],
-                    ),
-                  ),
-                ),
-              ),
-            )
-            .toList(),
-      ],
-    );
-  }
-
-  Widget _buildQuestion3Part<T>(
-    String prefix,
-    String highlight,
-    String suffix,
-    List<_Option<T>> options,
-    Function(T) onSelect,
-  ) {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        RichText(
-          text: TextSpan(
-            style: const TextStyle(fontSize: 28, height: 1.2),
-            children: [
-              TextSpan(
-                text: prefix,
-                style: const TextStyle(
-                  color: Colors.white,
-                  fontWeight: FontWeight.normal,
-                ),
-              ),
-              TextSpan(
-                text: highlight,
-                style: const TextStyle(
-                  color: Colors.yellow,
-                  fontWeight: FontWeight.bold,
-                ),
-              ),
-              TextSpan(
-                text: suffix,
-                style: const TextStyle(
-                  color: Colors.white,
-                  fontWeight: FontWeight.normal,
-                ),
-              ),
-            ],
-          ),
-        ),
-        const SizedBox(height: 32),
-        ...options
-            .map(
-              (opt) => Padding(
-                padding: const EdgeInsets.only(bottom: 12),
-                child: InkWell(
-                  onTap: () => onSelect(opt.value),
-                  borderRadius: BorderRadius.circular(12),
-                  child: Container(
-                    padding: const EdgeInsets.symmetric(
-                      horizontal: 20,
-                      vertical: 16,
-                    ),
-                    decoration: BoxDecoration(
-                      color: opt.isSelected
-                          ? AppColors.primary.withOpacity(0.2)
-                          : Colors.grey[900],
-                      borderRadius: BorderRadius.circular(12),
-                      border: Border.all(
-                        color: opt.isSelected
-                            ? AppColors.primary
-                            : Colors.transparent,
-                        width: 2,
-                      ),
-                    ),
-                    child: Row(
-                      children: [
-                        Icon(
-                          opt.icon,
-                          color: opt.isSelected
-                              ? AppColors.primary
-                              : Colors.grey[400],
-                          size: 24,
-                        ),
-                        const SizedBox(width: 12),
-                        Expanded(
-                          child: Text(
-                            opt.label,
-                            style: const TextStyle(
-                              color: Colors.white,
-                              fontSize: 16,
-                              fontWeight: FontWeight.w500,
-                            ),
-                          ),
-                        ),
-                        if (opt.isSelected)
-                          const Icon(
-                            Icons.check_circle,
-                            color: AppColors.primary,
-                          )
-                        else
-                          Icon(Icons.circle_outlined, color: Colors.grey[600]),
-                      ],
-                    ),
-                  ),
-                ),
-              ),
-            )
-            .toList(),
-      ],
-    );
-  }
-}
-
-class _Option<T> {
-  final String label;
-  final T value;
-  final bool isSelected;
-  final IconData icon;
-
-  _Option(this.label, this.value, this.isSelected, this.icon);
 }

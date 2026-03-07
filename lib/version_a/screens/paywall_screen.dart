@@ -1,4 +1,3 @@
-import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:url_launcher/url_launcher.dart';
 import 'package:purchases_flutter/purchases_flutter.dart';
@@ -20,10 +19,7 @@ class PaywallScreen extends StatefulWidget {
 class _PaywallScreenState extends State<PaywallScreen>
     with SingleTickerProviderStateMixin {
   Plan selected = Plan.weekly;
-  bool showLoadingBar = false;
   bool showCloseButton = false;
-  double loadingProgress = 0.0;
-  Timer? _progressTimer;
 
   Package? _subPackage;
   Package? _lifetimePackage;
@@ -39,36 +35,19 @@ class _PaywallScreenState extends State<PaywallScreen>
     Purchases.addCustomerInfoUpdateListener((info) {
       final isPro = info.entitlements.active.containsKey(ENTITLEMENT_ID);
       if (isPro && mounted) {
-        // Defer navigation until after build phase
         WidgetsBinding.instance.addPostFrameCallback((_) {
           if (mounted) _goSuccess();
         });
       }
     });
-    Future.delayed(const Duration(seconds: 2), () {
-      if (!mounted) return;
-      setState(() => showLoadingBar = true);
-      const total = 30;
-      int tick = 0;
-      _progressTimer = Timer.periodic(const Duration(milliseconds: 100), (t) {
-        tick++;
-        if (!mounted) return;
-        setState(() => loadingProgress = tick / total);
-        if (tick >= total) t.cancel();
-      });
-    });
-    Future.delayed(const Duration(seconds: 5), () {
-      if (!mounted) return;
-      setState(() {
-        showCloseButton = true;
-        showLoadingBar = false;
-      });
+    // Show close button immediately — no fake loading delay
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (mounted) setState(() => showCloseButton = true);
     });
   }
 
   @override
   void dispose() {
-    _progressTimer?.cancel();
     super.dispose();
   }
 
@@ -419,43 +398,26 @@ class _PaywallScreenState extends State<PaywallScreen>
               ),
             ),
 
-            // loader / close button
-            Padding(
-              padding: const EdgeInsets.only(top: 8.0, right: 8.0),
-              child: AnimatedSwitcher(
-                duration: const Duration(milliseconds: 250),
-                child: showCloseButton
-                    ? IconButton(
-                        key: const ValueKey('close'),
-                        onPressed: _loading
-                            ? null
-                            : () {
-                                Navigator.of(context).pushAndRemoveUntil(
-                                  MaterialPageRoute(builder: (_) => const HomeScreen()),
-                                  (route) => false,
-                                );
-                              },
-                        icon: Icon(
-                          Icons.cancel_rounded,
-                          color: Colors.white.withOpacity(0.85),
-                          size: 28,
-                        ),
-                      )
-                    : (showLoadingBar
-                        ? SizedBox(
-                            key: const ValueKey('loader'),
-                            width: 30,
-                            height: 30,
-                            child: CircularProgressIndicator(
-                              value: loadingProgress.clamp(0.0, 1.0),
-                              strokeWidth: 3,
-                              color: AppColors.primary,
-                              backgroundColor: Colors.white.withOpacity(0.15),
-                            ),
-                          )
-                        : const SizedBox.shrink()),
+            // Close button — always visible
+            if (showCloseButton)
+              Padding(
+                padding: const EdgeInsets.only(top: 8.0, right: 8.0),
+                child: IconButton(
+                  onPressed: _loading
+                      ? null
+                      : () {
+                          Navigator.of(context).pushAndRemoveUntil(
+                            MaterialPageRoute(builder: (_) => const HomeScreen()),
+                            (route) => false,
+                          );
+                        },
+                  icon: Icon(
+                    Icons.cancel_rounded,
+                    color: Colors.white.withOpacity(0.85),
+                    size: 28,
+                  ),
+                ),
               ),
-            ),
           ],
         ),
       ),

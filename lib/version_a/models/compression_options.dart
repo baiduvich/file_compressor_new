@@ -1,11 +1,10 @@
 enum CompressionPreset {
-  smart('Smart', 'Automatically optimizes quality & size'),
-  highQuality('High Quality', 'Prioritizes quality over size'),
-  maxCompression('Max Compression', 'Smallest possible size');
+  smart('Balanced', 'Best quality/size ratio — recommended', 'Typically 50–80% smaller'),
+  highQuality('Near Original', 'Minimal quality loss, moderate reduction', 'Typically 15–40% smaller'),
+  maxCompression('Smallest File', 'Maximum reduction — converts to efficient formats', 'Typically 70–95% smaller');
 
-  const CompressionPreset(this.name, this.description);
+  const CompressionPreset(this.name, this.description, this.expectedSavings);
   final String name;
   final String description;
+  final String expectedSavings;
 }
-
-// Legacy enums removed: CompressionMode, CompressionLevel, SmartCompressionQuality

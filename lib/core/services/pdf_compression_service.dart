@@ -1,86 +1,109 @@
 import 'dart:io';
-import 'package:flutter/services.dart';
+import 'package:http/http.dart' as http;
+import 'package:path/path.dart' as path;
+import 'package:path_provider/path_provider.dart';
 import '../../version_a/models/compression_options.dart';
 import '../../version_a/models/file_info.dart';
-import 'package:path/path.dart' as path;
 
 class PdfCompressionService {
-  static const MethodChannel _channel = MethodChannel('pdf_compressor');
+  static const String _baseUrl = 'https://pdfcompress.odtdoceditor.com';
+
+  static int _levelForPreset(CompressionPreset preset) {
+    switch (preset) {
+      case CompressionPreset.highQuality:
+        return 1;
+      case CompressionPreset.smart:
+        return 3;
+      case CompressionPreset.maxCompression:
+        return 5;
+    }
+  }
 
   Future<FileInfo> compressPdf(
-    FileInfo fileInfo, 
+    FileInfo fileInfo,
     String outputDirectory,
     CompressionPreset preset,
   ) async {
-    // Map preset to compression level (0.0 = max compression, 1.0 = high quality)
-    double quality = 0.5;
-    switch (preset) {
-      case CompressionPreset.smart:
-        quality = 0.5;
-        break;
-      case CompressionPreset.highQuality:
-        quality = 0.8;
-        break;
-      case CompressionPreset.maxCompression:
-        quality = 0.2;
-        break;
-    }
-
+    final int level = _levelForPreset(preset);
     final String fileName = path.basenameWithoutExtension(fileInfo.name);
-    final int timestamp = DateTime.now().millisecondsSinceEpoch;
-    final String targetOutputPath = '$outputDirectory/${fileName}_compressed_$timestamp.pdf';
+    final Directory tmpDir = await getTemporaryDirectory();
+    final String localOutputPath =
+        '${tmpDir.path}/${fileName}_compressed_${DateTime.now().millisecondsSinceEpoch}.pdf';
 
     try {
-      print('Dart: Attempting PDF Compression...');
-      print('Dart: Quality: $quality');
-      
-      // Try native iOS compression first
-      try {
-        final String? compressedPath = await _channel.invokeMethod<String>(
-          'compressPdf',
-          {
-            'inputPath': fileInfo.path,
-            'outputPath': targetOutputPath,
-            'quality': quality,
-          },
-        );
+      // ── Step 1: upload file to backend ───────────────────────────────────
+      final uri = Uri.parse('$_baseUrl/compress');
+      final request = http.MultipartRequest('POST', uri)
+        ..fields['level'] = level.toString()
+        ..files.add(await http.MultipartFile.fromPath(
+          'file',
+          fileInfo.path,
+          filename: fileInfo.name,
+        ));
 
-        if (compressedPath != null) {
-          final File compressedFile = File(compressedPath);
-          if (await compressedFile.exists()) {
-            final int compressedSize = await compressedFile.length();
-            print('Dart: Native compression - Final Size: $compressedSize bytes');
-            print('Dart: Ratio: ${(compressedSize / fileInfo.sizeInBytes * 100).toStringAsFixed(2)}%');
-            
-            if (compressedSize < fileInfo.sizeInBytes) {
-              return FileInfo(
-                name: path.basename(compressedFile.path),
-                path: compressedFile.path,
-                sizeInBytes: fileInfo.sizeInBytes,
-                compressedPath: compressedFile.path,
-                compressedSizeInBytes: compressedSize,
-                dateAdded: DateTime.now(),
-              );
-            }
-          }
-        }
-      } catch (nativeError) {
-        print('Dart: Native compression failed: $nativeError');
+      final streamedResponse = await request.send().timeout(
+        const Duration(minutes: 3),
+        onTimeout: () => throw Exception('Upload timed out after 3 minutes'),
+      );
+
+      if (streamedResponse.statusCode != 200) {
+        final body = await streamedResponse.stream.bytesToString();
+        throw Exception('Server error ${streamedResponse.statusCode}: $body');
       }
-      
-      // If compression failed or didn't reduce size, return original
-      print('Dart: Compression ineffective or failed. Returning original.');
-      return fileInfo.copyWith(
-        compressedPath: fileInfo.path,
-        compressedSizeInBytes: fileInfo.sizeInBytes,
-      );
 
-    } catch (e) {
-      print('PDF Compression failed: $e');
-      return fileInfo.copyWith(
-        compressedPath: fileInfo.path,
-        compressedSizeInBytes: fileInfo.sizeInBytes,
+      final responseBody = await streamedResponse.stream.bytesToString();
+
+      // ── Step 2: parse compressed_url from JSON response ──────────────────
+      final compressedUrl = _parseCompressedUrl(responseBody);
+      if (compressedUrl == null) {
+        throw Exception('No compressed_url in response: $responseBody');
+      }
+
+      // ── Step 3: download compressed file ─────────────────────────────────
+      final downloadResponse = await http
+          .get(Uri.parse(compressedUrl))
+          .timeout(const Duration(minutes: 2));
+
+      if (downloadResponse.statusCode != 200) {
+        throw Exception('Download failed: HTTP ${downloadResponse.statusCode}');
+      }
+
+      // ── Step 4: save to temp directory ───────────────────────────────────
+      final outFile = File(localOutputPath);
+      await outFile.writeAsBytes(downloadResponse.bodyBytes);
+
+      final int compressedSize = await outFile.length();
+
+      if (compressedSize >= fileInfo.sizeInBytes) {
+        await outFile.delete().catchError((_) => outFile);
+        return _passthrough(fileInfo);
+      }
+
+      return FileInfo(
+        name: '${fileName}_compressed.pdf',
+        path: fileInfo.path,
+        sizeInBytes: fileInfo.sizeInBytes,
+        compressedPath: localOutputPath,
+        compressedSizeInBytes: compressedSize,
+        dateAdded: DateTime.now(),
       );
+    } catch (e) {
+      // Network unavailable, timeout, or server error — fall back silently
+      return _passthrough(fileInfo);
     }
   }
+
+  /// Parses {"compressed_url": "...", "success": true} without adding dart:convert
+  /// (keeps the dependency footprint minimal). Falls back to a simple string search.
+  String? _parseCompressedUrl(String json) {
+    // Look for "compressed_url":"<value>" allowing spaces and both quote styles
+    final exp = RegExp(r'"compressed_url"\s*:\s*"([^"]+)"');
+    final match = exp.firstMatch(json);
+    return match?.group(1);
+  }
+
+  FileInfo _passthrough(FileInfo fileInfo) => fileInfo.copyWith(
+        compressedPath: fileInfo.path,
+        compressedSizeInBytes: fileInfo.sizeInBytes,
+      );
 }
