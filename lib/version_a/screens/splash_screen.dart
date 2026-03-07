@@ -2,6 +2,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_animate/flutter_animate.dart';
 import '../../core/constants/app_colors.dart';
+import '../../core/utils/responsive.dart';
 import 'onboarding_screen.dart';
 import 'home_screen.dart';
 
@@ -59,50 +60,52 @@ class _SplashScreenState extends State<SplashScreen> with SingleTickerProviderSt
   @override
   Widget build(BuildContext context) {
     final isDark = Theme.of(context).brightness == Brightness.dark;
-    
+    final logoSize = Responsive.emptyStateSize(context);
+    final innerSize = logoSize * 0.5;
+
     return Scaffold(
       backgroundColor: isDark ? AppColors.backgroundDark : AppColors.background,
       body: Center(
-        child: Column(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            // Animated compress icon
-            Container(
-              width: 200,
-              height: 200,
-              decoration: BoxDecoration(
-                shape: BoxShape.circle,
-                gradient: const LinearGradient(
-                  colors: AppColors.primaryGradient,
-                  begin: Alignment.topLeft,
-                  end: Alignment.bottomRight,
-                ),
-                boxShadow: [
-                  BoxShadow(
-                    color: AppColors.primary.withValues(alpha: 0.4),
-                    blurRadius: 40,
-                    offset: const Offset(0, 15),
+        child: SingleChildScrollView(
+          child: Column(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              Container(
+                width: logoSize,
+                height: logoSize,
+                decoration: BoxDecoration(
+                  shape: BoxShape.circle,
+                  gradient: const LinearGradient(
+                    colors: AppColors.primaryGradient,
+                    begin: Alignment.topLeft,
+                    end: Alignment.bottomRight,
                   ),
-                ],
-              ),
-              child: Center(
-                child: ClipRRect(
-                  borderRadius: BorderRadius.circular(12),
-                  child: Image.asset(
-                    'assets/icons/compress_icon.png',
-                    width: 100,
-                    height: 100,
-                    errorBuilder: (context, error, stackTrace) {
-                      return const Icon(
-                        Icons.compress,
-                        size: 80,
-                        color: AppColors.textOnPrimary,
-                      );
-                    },
+                  boxShadow: [
+                    BoxShadow(
+                      color: AppColors.primary.withValues(alpha: 0.4),
+                      blurRadius: 40,
+                      offset: const Offset(0, 15),
+                    ),
+                  ],
+                ),
+                child: Center(
+                  child: ClipRRect(
+                    borderRadius: BorderRadius.circular(12),
+                    child: Image.asset(
+                      'assets/icons/compress_icon.png',
+                      width: innerSize,
+                      height: innerSize,
+                      errorBuilder: (context, error, stackTrace) {
+                        return Icon(
+                          Icons.compress,
+                          size: innerSize * 0.8,
+                          color: AppColors.textOnPrimary,
+                        );
+                      },
+                    ),
                   ),
                 ),
-              ),
-            )
+              )
                 .animate(controller: _controller)
                 .fadeIn(duration: 600.ms)
                 .scale(
@@ -124,10 +127,10 @@ class _SplashScreenState extends State<SplashScreen> with SingleTickerProviderSt
               shaderCallback: (bounds) => const LinearGradient(
                 colors: AppColors.primaryGradient,
               ).createShader(bounds),
-              child: const Text(
+              child: Text(
                 'File Compressor',
                 style: TextStyle(
-                  fontSize: 32,
+                  fontSize: Responsive.display(context),
                   fontWeight: FontWeight.bold,
                   color: Colors.white,
                 ),
@@ -144,11 +147,10 @@ class _SplashScreenState extends State<SplashScreen> with SingleTickerProviderSt
             
             const SizedBox(height: 12),
             
-            // Tagline
             Text(
               'Compress Smarter, Not Harder',
               style: TextStyle(
-                fontSize: 16,
+                fontSize: Responsive.body(context),
                 color: isDark ? AppColors.textSecondaryDark : AppColors.textSecondary,
               ),
             )
@@ -170,7 +172,8 @@ class _SplashScreenState extends State<SplashScreen> with SingleTickerProviderSt
             )
                 .animate(controller: _controller)
                 .fadeIn(delay: 800.ms, duration: 400.ms),
-          ],
+            ],
+          ),
         ),
       ),
     );

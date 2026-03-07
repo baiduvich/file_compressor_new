@@ -4,6 +4,7 @@ import 'package:flutter/services.dart';
 import 'package:in_app_review/in_app_review.dart';
 import 'package:video_player/video_player.dart';
 import '../../core/constants/app_colors.dart';
+import '../../core/utils/responsive.dart';
 import 'paywall_screen.dart';
 
 /// Onboarding flow: 3 screens (title → video placeholder → text → Next), then paywall.
@@ -218,15 +219,15 @@ class _OnboardingPage extends StatelessWidget {
               text: TextSpan(
                 style: Theme.of(context).textTheme.titleLarge?.copyWith(
                       color: textColor,
-                      fontSize: 22,
+                      fontSize: Responsive.titleLarge(context),
                     ),
-                children: const [
-                  TextSpan(text: 'Compress files '),
+                children: [
+                  const TextSpan(text: 'Compress files '),
                   TextSpan(
                     text: 'EASILY!',
                     style: TextStyle(
                       fontWeight: FontWeight.bold,
-                      fontSize: 26,
+                      fontSize: Responsive.fontSize(context, ratio: 0.058, min: 20, max: 30),
                       color: Colors.amber,
                     ),
                   ),
@@ -246,26 +247,26 @@ class _OnboardingPage extends StatelessWidget {
         children: [
           const Expanded(child: _BeforeAfterComparisonSlider()),
           const SizedBox(height: 24),
-          RichText(
-            textAlign: TextAlign.center,
-            text: TextSpan(
-              style: Theme.of(context).textTheme.titleLarge?.copyWith(
-                    color: textColor,
-                    fontSize: 22,
+            RichText(
+              textAlign: TextAlign.center,
+              text: TextSpan(
+                style: Theme.of(context).textTheme.titleLarge?.copyWith(
+                      color: textColor,
+                      fontSize: Responsive.titleLarge(context),
                   ),
-              children: const [
-                TextSpan(text: 'Keep '),
-                TextSpan(
-                  text: 'HIGH-QUALITY!',
-                  style: TextStyle(
-                    fontWeight: FontWeight.bold,
-                    fontSize: 26,
-                    color: Colors.amber,
+                children: [
+                  const TextSpan(text: 'Keep '),
+                  TextSpan(
+                    text: 'HIGH-QUALITY!',
+                    style: TextStyle(
+                      fontWeight: FontWeight.bold,
+                      fontSize: Responsive.fontSize(context, ratio: 0.058, min: 20, max: 30),
+                      color: Colors.amber,
+                    ),
                   ),
-                ),
-              ],
+                ],
+              ),
             ),
-          ),
         ],
       ),
     );

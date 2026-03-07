@@ -3,6 +3,7 @@ import 'package:flutter_animate/flutter_animate.dart';
 import 'package:provider/provider.dart';
 
 import '../../core/constants/app_colors.dart';
+import '../../core/utils/responsive.dart';
 import '../../core/services/file_service.dart';
 import '../../core/services/history_service.dart';
 import '../models/compression_options.dart';
@@ -215,50 +216,60 @@ class _HomeScreenState extends State<HomeScreen> with SingleTickerProviderStateM
 
             const SizedBox(height: 32),
 
-            // ── Upload button ─────────────────────────────────────────
+            // ── Upload button (40% screen width, icon scales proportionally) ──
             Center(
-              child: Column(
-                children: [
-                  Material(
-                    color: AppColors.primary,
-                    borderRadius: BorderRadius.circular(20),
-                    child: InkWell(
-                      borderRadius: BorderRadius.circular(20),
-                      onTap: _isLoading ? null : _selectAndCompressFiles,
-                      child: Container(
-                        width: 160,
-                        height: 160,
-                        alignment: Alignment.center,
-                        child: _isLoading
-                            ? const CircularProgressIndicator(
-                                valueColor: AlwaysStoppedAnimation<Color>(
-                                    AppColors.textOnPrimary),
-                              )
-                            : const Icon(Icons.upload_file,
-                                size: 56, color: AppColors.textOnPrimary),
+              child: Builder(
+                builder: (ctx) {
+                  final screenW = Responsive.width(ctx);
+                  final buttonSize = screenW * 0.40;
+                  final iconSize = buttonSize * (56 / 160);
+                  return Column(
+                    children: [
+                      Material(
+                        color: AppColors.primary,
+                        borderRadius: BorderRadius.circular(20),
+                        child: InkWell(
+                          borderRadius: BorderRadius.circular(20),
+                          onTap: _isLoading ? null : _selectAndCompressFiles,
+                          child: Container(
+                            width: buttonSize,
+                            height: buttonSize,
+                            alignment: Alignment.center,
+                            child: _isLoading
+                                ? CircularProgressIndicator(
+                                    valueColor: const AlwaysStoppedAnimation<Color>(
+                                        AppColors.textOnPrimary),
+                                  )
+                                : Icon(Icons.upload_file,
+                                    size: iconSize,
+                                    color: AppColors.textOnPrimary),
+                          ),
+                        ),
+                      )
+                          .animate(onPlay: (c) => c.repeat(reverse: true))
+                          .shimmer(
+                            delay: 3.seconds,
+                            duration: 1.5.seconds,
+                            color: Colors.white.withOpacity(0.15),
+                          ),
+                      const SizedBox(height: 16),
+                      Text(
+                        'Tap to compress files',
+                        style: TextStyle(
+                            fontSize: Responsive.body(ctx),
+                            fontWeight: FontWeight.w500,
+                            color: textColor),
                       ),
-                    ),
-                  )
-                      .animate(onPlay: (c) => c.repeat(reverse: true))
-                      .shimmer(
-                        delay: 3.seconds,
-                        duration: 1.5.seconds,
-                        color: Colors.white.withOpacity(0.15),
+                      const SizedBox(height: 6),
+                      Text(
+                        'PDF • Images • Video • Audio • Office',
+                        style: TextStyle(
+                            fontSize: Responsive.bodySmall(ctx),
+                            color: secondaryColor),
                       ),
-                  const SizedBox(height: 16),
-                  Text(
-                    'Tap to compress files',
-                    style: TextStyle(
-                        fontSize: 16,
-                        fontWeight: FontWeight.w500,
-                        color: textColor),
-                  ),
-                  const SizedBox(height: 6),
-                  Text(
-                    'PDF • Images • Video • Audio • Office',
-                    style: TextStyle(fontSize: 12, color: secondaryColor),
-                  ),
-                ],
+                    ],
+                  );
+                },
               ),
             ),
 
@@ -274,7 +285,7 @@ class _HomeScreenState extends State<HomeScreen> with SingleTickerProviderStateM
                   children: [
                     Text('Recent',
                         style: TextStyle(
-                            fontSize: 18,
+                            fontSize: Responsive.title(context),
                             fontWeight: FontWeight.w600,
                             color: textColor)),
                     const SizedBox(height: 12),
@@ -311,15 +322,18 @@ class _HomeScreenState extends State<HomeScreen> with SingleTickerProviderStateM
       ),
       child: Column(
         children: [
-          const Icon(Icons.compress, size: 36, color: AppColors.primary),
+          Icon(Icons.compress,
+              size: Responsive.fontSize(context, ratio: 0.06, min: 28, max: 44),
+              color: AppColors.primary),
           const SizedBox(height: 10),
           Text('Compress PDF, photos, videos,\naudio & Office files — all on-device.',
               textAlign: TextAlign.center,
-              style: TextStyle(fontSize: 14, color: secondaryColor)),
-          const SizedBox(height: 8),
-          const Text('Images convert to WebP • Audio to AAC',
               style: TextStyle(
-                  fontSize: 12,
+                  fontSize: Responsive.body(context), color: secondaryColor)),
+          const SizedBox(height: 8),
+          Text('Images convert to WebP • Audio to AAC',
+              style: TextStyle(
+                  fontSize: Responsive.bodySmall(context),
                   color: AppColors.primary,
                   fontWeight: FontWeight.w600)),
         ],
@@ -368,7 +382,7 @@ class _HomeScreenState extends State<HomeScreen> with SingleTickerProviderStateM
               Text(
                 displayValue,
                 style: TextStyle(
-                  fontSize: 36,
+                  fontSize: Responsive.headline(context),
                   fontWeight: FontWeight.w900,
                   color: AppColors.primary,
                 ),
@@ -376,14 +390,16 @@ class _HomeScreenState extends State<HomeScreen> with SingleTickerProviderStateM
               const SizedBox(width: 8),
               Text(' saved',
                   style: TextStyle(
-                      fontSize: 18,
+                      fontSize: Responsive.title(context),
                       fontWeight: FontWeight.w600,
                       color: textColor)),
             ],
           ),
           const SizedBox(height: 4),
           Text(equivalent,
-              style: TextStyle(fontSize: 13, color: secondaryColor)),
+              style: TextStyle(
+                  fontSize: Responsive.bodySmall(context),
+                  color: secondaryColor)),
 
           const SizedBox(height: 16),
 
@@ -449,15 +465,16 @@ class _StatChip extends StatelessWidget {
             Text(
               value,
               style: TextStyle(
-                  fontSize: 18,
+                  fontSize: Responsive.title(context),
                   fontWeight: FontWeight.w800,
                   color: color),
             ),
             const SizedBox(height: 2),
             Text(
               label,
-              style: const TextStyle(
-                  fontSize: 11, color: AppColors.textSecondary),
+              style: TextStyle(
+                  fontSize: Responsive.bodySmall(context),
+                  color: AppColors.textSecondary),
             ),
           ],
         ),

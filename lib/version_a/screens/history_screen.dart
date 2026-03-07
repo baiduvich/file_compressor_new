@@ -3,6 +3,7 @@ import 'package:flutter_animate/flutter_animate.dart';
 import 'package:provider/provider.dart';
 import 'package:intl/intl.dart';
 import '../../core/constants/app_colors.dart';
+import '../../core/utils/responsive.dart';
 import '../../core/services/history_service.dart';
 import '../../core/services/file_service.dart';
 
@@ -74,40 +75,48 @@ class HistoryScreen extends StatelessWidget {
       body: Consumer<HistoryService>(
         builder: (context, historyService, _) {
           if (historyService.history.isEmpty) {
-            return Center(
-              child: Column(
-                mainAxisAlignment: MainAxisAlignment.center,
-                children: [
-                  Image.asset(
-                    'assets/icons/empty_state.png',
-                    width: 150,
-                    height: 150,
-                    errorBuilder: (context, error, stackTrace) {
-                      return const Icon(
-                        Icons.history,
-                        size: 100,
-                        color: AppColors.textSecondaryDark,
-                      );
-                    },
+            final size = Responsive.emptyStateSize(context);
+            return SingleChildScrollView(
+              child: ConstrainedBox(
+                constraints: BoxConstraints(
+                  minHeight: MediaQuery.sizeOf(context).height - 200,
+                ),
+                child: Center(
+                  child: Column(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+                      Image.asset(
+                        'assets/icons/empty_state.png',
+                        width: size,
+                        height: size,
+                        errorBuilder: (context, error, stackTrace) {
+                          return Icon(
+                            Icons.history,
+                            size: size * 0.65,
+                            color: AppColors.textSecondaryDark,
+                          );
+                        },
+                      ),
+                      const SizedBox(height: 24),
+                      Text(
+                        'No compression history',
+                        style: TextStyle(
+                          fontSize: Responsive.title(context),
+                          fontWeight: FontWeight.w600,
+                          color: AppColors.textPrimaryDark,
+                        ),
+                      ),
+                      const SizedBox(height: 8),
+                      Text(
+                        'Compressed files will appear here',
+                        style: TextStyle(
+                          fontSize: Responsive.body(context),
+                          color: AppColors.textSecondaryDark,
+                        ),
+                      ),
+                    ],
                   ),
-                  const SizedBox(height: 24),
-                  const Text(
-                    'No compression history',
-                    style: TextStyle(
-                      fontSize: 18,
-                      fontWeight: FontWeight.w600,
-                      color: AppColors.textPrimaryDark,
-                    ),
-                  ),
-                  const SizedBox(height: 8),
-                  const Text(
-                    'Compressed files will appear here',
-                    style: TextStyle(
-                      fontSize: 14,
-                      color: AppColors.textSecondaryDark,
-                    ),
-                  ),
-                ],
+                ),
               ),
             )
                 .animate()

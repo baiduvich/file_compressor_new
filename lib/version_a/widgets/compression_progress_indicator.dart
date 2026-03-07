@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_animate/flutter_animate.dart';
 import 'dart:math' as math;
 import '../../core/constants/app_colors.dart';
+import '../../core/utils/responsive.dart';
 
 class CompressionProgressIndicator extends StatefulWidget {
   final double progress;
@@ -38,13 +39,22 @@ class _CompressionProgressIndicatorState extends State<CompressionProgressIndica
 
   @override
   Widget build(BuildContext context) {
+    final screenW = Responsive.width(context);
+    final outer = screenW * 0.55;
+    final pulseSize = outer * (180 / 200);
+    final progressSize = outer * (160 / 200);
+    final strokeWidth = 12 * (outer / 200);
+    final centerIconSize = 48 * (outer / 200);
+    final centerFontSize =
+        Responsive.fontSize(context, ratio: 0.10, min: 32, max: 56);
+
     return Column(
       mainAxisSize: MainAxisSize.min,
       crossAxisAlignment: CrossAxisAlignment.center,
       children: [
         SizedBox(
-          width: 200,
-          height: 200,
+          width: outer,
+          height: outer,
           child: Stack(
             alignment: Alignment.center,
             children: [
@@ -52,9 +62,13 @@ class _CompressionProgressIndicatorState extends State<CompressionProgressIndica
               AnimatedBuilder(
                 animation: _controller,
                 builder: (context, child) {
+                  final pulse =
+                      pulseSize +
+                      (math.sin(_controller.value * 2 * math.pi) *
+                          (10 * outer / 200));
                   return Container(
-                    width: 180 + (math.sin(_controller.value * 2 * math.pi) * 10),
-                    height: 180 + (math.sin(_controller.value * 2 * math.pi) * 10),
+                    width: pulse,
+                    height: pulse,
                     decoration: BoxDecoration(
                       shape: BoxShape.circle,
                       color: AppColors.primary.withOpacity(0.1),
@@ -62,14 +76,13 @@ class _CompressionProgressIndicatorState extends State<CompressionProgressIndica
                   );
                 },
               ),
-              
-              // Progress Circle
               SizedBox(
-                width: 160,
-                height: 160,
+                width: progressSize,
+                height: progressSize,
                 child: CustomPaint(
                   painter: _CircularProgressPainter(
                     progress: widget.progress,
+                    strokeWidth: strokeWidth,
                   ),
                 ),
               ),
@@ -80,9 +93,9 @@ class _CompressionProgressIndicatorState extends State<CompressionProgressIndica
                 children: [
                   if (widget.progress <= 0) ...[
                     // Loading State
-                    const Icon(
+                    Icon(
                       Icons.hourglass_empty_rounded,
-                      size: 48,
+                      size: centerIconSize,
                       color: AppColors.primary,
                     )
                     .animate(onPlay: (controller) => controller.repeat())
@@ -94,7 +107,7 @@ class _CompressionProgressIndicatorState extends State<CompressionProgressIndica
                       'Processing...',
                       textAlign: TextAlign.center,
                       style: TextStyle(
-                        fontSize: 18,
+                        fontSize: Responsive.title(context),
                         fontWeight: FontWeight.bold,
                         color: AppColors.primary,
                         shadows: [
@@ -109,15 +122,14 @@ class _CompressionProgressIndicatorState extends State<CompressionProgressIndica
                      .then()
                      .fadeOut(duration: 800.ms),
                   ] else ...[
-                    // Progress State
                     ShaderMask(
                       shaderCallback: (bounds) => const LinearGradient(
                         colors: AppColors.primaryGradient,
                       ).createShader(bounds),
                       child: Text(
                         '${(widget.progress * 100).toInt()}%',
-                        style: const TextStyle(
-                          fontSize: 48,
+                        style: TextStyle(
+                          fontSize: centerFontSize,
                           fontWeight: FontWeight.bold,
                           color: Colors.white,
                         ),
@@ -137,8 +149,8 @@ class _CompressionProgressIndicatorState extends State<CompressionProgressIndica
             textAlign: TextAlign.center,
             maxLines: 3,
             overflow: TextOverflow.ellipsis,
-            style: const TextStyle(
-              fontSize: 14,
+            style: TextStyle(
+              fontSize: Responsive.body(context),
               color: AppColors.textSecondary,
               height: 1.4,
             ),
@@ -151,24 +163,24 @@ class _CompressionProgressIndicatorState extends State<CompressionProgressIndica
 
 class _CircularProgressPainter extends CustomPainter {
   final double progress;
+  final double strokeWidth;
 
-  _CircularProgressPainter({required this.progress});
+  _CircularProgressPainter({required this.progress, this.strokeWidth = 12});
 
   @override
   void paint(Canvas canvas, Size size) {
     final center = Offset(size.width / 2, size.height / 2);
     final radius = size.width / 2;
-    
-    // Background circle
+    final inset = strokeWidth / 2;
+
     final backgroundPaint = Paint()
       ..color = AppColors.textLight.withOpacity(0.2)
       ..style = PaintingStyle.stroke
-      ..strokeWidth = 12
+      ..strokeWidth = strokeWidth
       ..strokeCap = StrokeCap.round;
-    
-    canvas.drawCircle(center, radius - 6, backgroundPaint);
-    
-    // Progress arc with gradient effect
+
+    canvas.drawCircle(center, radius - inset, backgroundPaint);
+
     final progressPaint = Paint()
       ..shader = const LinearGradient(
         colors: AppColors.primaryGradient,
@@ -176,12 +188,12 @@ class _CircularProgressPainter extends CustomPainter {
         end: Alignment.bottomRight,
       ).createShader(Rect.fromCircle(center: center, radius: radius))
       ..style = PaintingStyle.stroke
-      ..strokeWidth = 12
+      ..strokeWidth = strokeWidth
       ..strokeCap = StrokeCap.round;
-    
+
     final sweepAngle = 2 * math.pi * progress;
     canvas.drawArc(
-      Rect.fromCircle(center: center, radius: radius - 6),
+      Rect.fromCircle(center: center, radius: radius - inset),
       -math.pi / 2,
       sweepAngle,
       false,
@@ -191,6 +203,7 @@ class _CircularProgressPainter extends CustomPainter {
 
   @override
   bool shouldRepaint(_CircularProgressPainter oldDelegate) {
-    return oldDelegate.progress != progress;
+    return oldDelegate.progress != progress ||
+        oldDelegate.strokeWidth != strokeWidth;
   }
 }

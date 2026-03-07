@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:url_launcher/url_launcher.dart';
 import 'package:purchases_flutter/purchases_flutter.dart';
 import '../../core/constants/app_colors.dart';
+import '../../core/utils/responsive.dart';
 import '../../core/services/paywall_config_service.dart';
 import 'home_screen.dart';
 
@@ -151,30 +152,33 @@ class _PaywallScreenState extends State<PaywallScreen>
           alignment: Alignment.topRight,
           children: [
             SingleChildScrollView(
-              padding: const EdgeInsets.symmetric(horizontal: 20),
+              padding: EdgeInsets.only(
+                left: 20,
+                right: 20,
+                bottom: MediaQuery.paddingOf(context).bottom + 24,
+              ),
               child: Column(
                 children: [
                   const SizedBox(height: 50),
                   Image.asset(
                     'assets/images/paywall_banner.png',
-                    height: 80,
+                    height: Responsive.fontSize(context, ratio: 0.18, min: 60, max: 100),
                     fit: BoxFit.contain,
                     errorBuilder: (context, error, stackTrace) {
-                      return const Icon(
+                      return Icon(
                         Icons.compress,
-                        size: 80,
+                        size: Responsive.fontSize(context, ratio: 0.18, min: 60, max: 100),
                         color: AppColors.primary,
                       );
                     },
                   ),
                   const SizedBox(height: 16),
-                  // Fixed Title
                   Text.rich(
                     TextSpan(
-                      style: const TextStyle(
-                      fontSize: 32,
-                      fontWeight: FontWeight.w800,
-                      height: 1.2,
+                      style: TextStyle(
+                        fontSize: Responsive.display(context),
+                        fontWeight: FontWeight.w800,
+                        height: 1.2,
                       ),
                       children: [
                         const TextSpan(
