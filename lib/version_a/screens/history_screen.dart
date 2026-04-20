@@ -6,14 +6,29 @@ import '../../core/constants/app_colors.dart';
 import '../../core/utils/responsive.dart';
 import '../../core/services/history_service.dart';
 import '../../core/services/file_service.dart';
+import '../../core/services/analytics_service.dart';
 
-class HistoryScreen extends StatelessWidget {
+class HistoryScreen extends StatefulWidget {
   const HistoryScreen({super.key});
 
   @override
+  State<HistoryScreen> createState() => _HistoryScreenState();
+}
+
+class _HistoryScreenState extends State<HistoryScreen> {
+  final FileService _fileService = FileService();
+
+  @override
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      final count = context.read<HistoryService>().history.length;
+      AnalyticsService.historyViewed(itemCount: count);
+    });
+  }
+
+  @override
   Widget build(BuildContext context) {
-    final fileService = FileService();
-    
     return Scaffold(
       backgroundColor: Colors.black,
       appBar: AppBar(
@@ -27,7 +42,7 @@ class HistoryScreen extends StatelessWidget {
           Consumer<HistoryService>(
             builder: (context, historyService, _) {
               if (historyService.history.isEmpty) return const SizedBox.shrink();
-              
+
               return IconButton(
                 icon: const Icon(Icons.delete_outline, color: AppColors.error),
                 onPressed: () async {
@@ -61,9 +76,11 @@ class HistoryScreen extends StatelessWidget {
                       ],
                     ),
                   );
-                  
+
                   if (confirm == true) {
+                    final count = historyService.history.length;
                     await historyService.clearHistory();
+                    AnalyticsService.historyCleared(itemCount: count);
                   }
                 },
               );
@@ -129,7 +146,7 @@ class HistoryScreen extends StatelessWidget {
             itemBuilder: (context, index) {
               final item = historyService.history[index];
               final dateFormat = DateFormat('MMM dd, yyyy • hh:mm a');
-              
+
               return Container(
                 margin: const EdgeInsets.only(bottom: 16),
                 padding: const EdgeInsets.all(16),
@@ -194,7 +211,8 @@ class HistoryScreen extends StatelessWidget {
                           icon: const Icon(Icons.share, color: AppColors.primary),
                           onPressed: () async {
                             try {
-                              await fileService.shareFile(item.outputPath);
+                              await _fileService.shareFile(item.outputPath);
+                              AnalyticsService.fileShared(source: 'history');
                             } catch (e) {
                               if (!context.mounted) return;
                               ScaffoldMessenger.of(context).showSnackBar(
@@ -239,9 +257,10 @@ class HistoryScreen extends StatelessWidget {
                                 ],
                               ),
                             );
-                            
+
                             if (confirm == true) {
                               await historyService.removeFromHistory(item.id);
+                              AnalyticsService.historyItemDeleted();
                               if (!context.mounted) return;
                               ScaffoldMessenger.of(context).showSnackBar(
                                 const SnackBar(
@@ -300,7 +319,7 @@ class HistoryScreen extends StatelessWidget {
                               ),
                               const SizedBox(height: 4),
                               Text(
-                                fileService.formatFileSize(
+                                _fileService.formatFileSize(
                                   item.totalOriginalSize - item.totalCompressedSize,
                                 ),
                                 style: const TextStyle(

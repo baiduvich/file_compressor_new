@@ -12,6 +12,7 @@ import '../../core/services/compression_service.dart';
 import '../../core/services/file_service.dart';
 import '../../core/services/history_service.dart';
 import '../../core/services/revenue_cat_service.dart';
+import '../../core/services/analytics_service.dart';
 import '../models/compression_history.dart';
 import '../models/compression_options.dart';
 import '../models/file_info.dart';
@@ -53,6 +54,8 @@ class _CompressionScreenState extends State<CompressionScreen>
   int _currentFileIndex = 0;
   bool _hasVideo = false;
 
+  late final DateTime _compressionStartTime;
+
   // Animated counter for % saved
   late AnimationController _counterController;
   late Animation<double> _counterAnimation;
@@ -61,6 +64,7 @@ class _CompressionScreenState extends State<CompressionScreen>
   @override
   void initState() {
     super.initState();
+    _compressionStartTime = DateTime.now();
     _counterController = AnimationController(
       vsync: this,
       duration: const Duration(milliseconds: 1800),
@@ -138,9 +142,29 @@ class _CompressionScreenState extends State<CompressionScreen>
         });
       _counterController.forward();
 
+      // Track compression completed
+      final types = widget.files.map((f) => f.extension).toSet().toList();
+      final originalMB = widget.files.fold(0, (sum, f) => sum + f.sizeInBytes) / (1024 * 1024);
+      final compressedMB = compressed.fold(0, (sum, f) => sum + (f.compressedSizeInBytes ?? f.sizeInBytes)) / (1024 * 1024);
+      final durationSec = DateTime.now().difference(_compressionStartTime).inSeconds;
+      AnalyticsService.compressionCompleted(
+        preset: widget.compressionPreset.name,
+        fileCount: compressed.length,
+        types: types,
+        originalMB: originalMB,
+        compressedMB: compressedMB,
+        savingsPercent: avgRatio,
+        durationSec: durationSec,
+      );
+
       // Fire review prompt asynchronously on 2nd+ compression — never blocks the UI
       _maybeRequestReview();
     } catch (e) {
+      AnalyticsService.compressionFailed(
+        preset: widget.compressionPreset.name,
+        types: widget.files.map((f) => f.extension).toSet().toList(),
+        error: '$e',
+      );
       if (!mounted) return;
       setState(() {
         _statusText = 'Compression failed';
@@ -158,6 +182,7 @@ class _CompressionScreenState extends State<CompressionScreen>
   Future<void> _cancelVideoCompression() async {
     if (_isCancelling) return;
     setState(() => _isCancelling = true);
+    AnalyticsService.compressionCancelled();
     try {
       await VideoCompress.cancelCompression();
     } catch (_) {}
@@ -207,13 +232,15 @@ class _CompressionScreenState extends State<CompressionScreen>
   Future<void> _shareFile(FileInfo file) async {
     final isPro = await RevenueCatService.isPro();
     if (!isPro) {
+      AnalyticsService.featureGateHit(feature: 'share');
       if (!mounted) return;
       await Navigator.push(
-          context, MaterialPageRoute(builder: (_) => const PaywallScreen()));
+          context, MaterialPageRoute(builder: (_) => const PaywallScreen(source: 'feature_gate')));
       return;
     }
     try {
       await _fileService.shareFile(file.compressedPath!);
+      AnalyticsService.fileShared();
     } catch (e) {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
@@ -225,13 +252,15 @@ class _CompressionScreenState extends State<CompressionScreen>
   Future<void> _openFile(FileInfo file) async {
     final isPro = await RevenueCatService.isPro();
     if (!isPro) {
+      AnalyticsService.featureGateHit(feature: 'open');
       if (!mounted) return;
       await Navigator.push(
-          context, MaterialPageRoute(builder: (_) => const PaywallScreen()));
+          context, MaterialPageRoute(builder: (_) => const PaywallScreen(source: 'feature_gate')));
       return;
     }
     try {
       await _fileService.openFile(file.compressedPath!);
+      AnalyticsService.fileOpened();
     } catch (e) {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
@@ -256,10 +285,12 @@ class _CompressionScreenState extends State<CompressionScreen>
               '(${avgRatio.toStringAsFixed(0)}% smaller)! 🗜️';
 
       await Share.share(text);
+      AnalyticsService.savingsShared();
     } catch (_) {}
   }
 
   Future<void> _compressOtherFiles() async {
+    AnalyticsService.filePickerOpened(source: 'results');
     final choice = await showModalBottomSheet<String>(
       context: context,
       backgroundColor: Colors.transparent,

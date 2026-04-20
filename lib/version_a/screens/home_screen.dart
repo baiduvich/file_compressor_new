@@ -6,6 +6,7 @@ import '../../core/constants/app_colors.dart';
 import '../../core/utils/responsive.dart';
 import '../../core/services/file_service.dart';
 import '../../core/services/history_service.dart';
+import '../../core/services/analytics_service.dart';
 import '../models/compression_options.dart';
 import '../models/file_info.dart';
 import '../widgets/compression_options_dialog.dart';
@@ -112,6 +113,7 @@ class _HomeScreenState extends State<HomeScreen> with SingleTickerProviderStateM
     );
 
     if (choice == null) return;
+    AnalyticsService.filePickerOpened();
     setState(() => _isLoading = true);
 
     try {
@@ -126,6 +128,10 @@ class _HomeScreenState extends State<HomeScreen> with SingleTickerProviderStateM
         setState(() => _isLoading = false);
         return;
       }
+
+      final types = files.map((f) => f.extension).toSet().toList();
+      final totalSizeMB = files.fold(0, (sum, f) => sum + f.sizeInBytes) / (1024 * 1024);
+      AnalyticsService.filesSelected(count: files.length, types: types, totalSizeMB: totalSizeMB);
 
       if (!mounted) return;
 
@@ -142,6 +148,13 @@ class _HomeScreenState extends State<HomeScreen> with SingleTickerProviderStateM
       final preset = options['preset'] as CompressionPreset;
       final bundleFiles = options['bundleFiles'] as bool;
       final bulkConversion = options['bulkConversion'] as bool? ?? false;
+
+      AnalyticsService.compressionStarted(
+        preset: preset.name,
+        fileCount: files.length,
+        types: types,
+        totalSizeMB: totalSizeMB,
+      );
 
       if (!mounted) return;
       await Navigator.push(

@@ -5,6 +5,7 @@ import 'package:in_app_review/in_app_review.dart';
 import 'package:video_player/video_player.dart';
 import '../../core/constants/app_colors.dart';
 import '../../core/utils/responsive.dart';
+import '../../core/services/analytics_service.dart';
 import 'paywall_screen.dart';
 
 /// Onboarding flow: 3 screens (title → video placeholder → text → Next), then paywall.
@@ -23,12 +24,15 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
   bool _reviewRequested = false;
   int? _nextCooldownSeconds;
   Timer? _nextCooldownTimer;
+  late final DateTime _onboardingStartTime;
 
   static const String _video3Asset = 'assets/videos/video3.mov';
 
   @override
   void initState() {
     super.initState();
+    _onboardingStartTime = DateTime.now();
+    AnalyticsService.onboardingScreenViewed(index: 0);
     _nextCooldownSeconds = 3;
     _nextCooldownTimer = Timer.periodic(const Duration(seconds: 1), (_) {
       if (!mounted) return;
@@ -73,6 +77,7 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
     final promptText = await _loadReviewPromptText();
     if (!mounted) return;
     if (promptText != null && promptText.trim().isNotEmpty) {
+      AnalyticsService.reviewPromptShown();
       await showDialog<void>(
         context: context,
         builder: (context) => AlertDialog(
@@ -82,11 +87,15 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
           ),
           actions: [
             TextButton(
-              onPressed: () => Navigator.pop(context),
+              onPressed: () {
+                AnalyticsService.reviewPromptDeclined();
+                Navigator.pop(context);
+              },
               child: const Text('Not now'),
             ),
             TextButton(
               onPressed: () {
+                AnalyticsService.reviewPromptAccepted();
                 Navigator.pop(context);
                 _inAppReview.requestReview();
               },
@@ -109,9 +118,12 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
         curve: Curves.easeInOut,
       );
       setState(() => _currentPage++);
+      AnalyticsService.onboardingScreenViewed(index: _currentPage);
     } else {
+      final durationSec = DateTime.now().difference(_onboardingStartTime).inSeconds;
+      AnalyticsService.onboardingCompleted(durationSec: durationSec);
       Navigator.of(context).pushReplacement(
-        MaterialPageRoute(builder: (_) => const PaywallScreen()),
+        MaterialPageRoute(builder: (_) => const PaywallScreen(source: 'onboarding')),
       );
     }
   }

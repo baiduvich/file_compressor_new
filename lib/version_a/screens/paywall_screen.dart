@@ -4,6 +4,7 @@ import 'package:purchases_flutter/purchases_flutter.dart';
 import '../../core/constants/app_colors.dart';
 import '../../core/utils/responsive.dart';
 import '../../core/services/paywall_config_service.dart';
+import '../../core/services/analytics_service.dart';
 import 'home_screen.dart';
 
 enum Plan { lifetime, weekly }
@@ -11,7 +12,8 @@ enum Plan { lifetime, weekly }
 const ENTITLEMENT_ID = 'pro1';
 
 class PaywallScreen extends StatefulWidget {
-  const PaywallScreen({super.key});
+  final String source;
+  const PaywallScreen({super.key, this.source = 'onboarding'});
 
   @override
   State<PaywallScreen> createState() => _PaywallScreenState();
@@ -25,13 +27,18 @@ class _PaywallScreenState extends State<PaywallScreen>
   Package? _subPackage;
   Package? _lifetimePackage;
   bool _loading = true;
+  late final DateTime _openTime;
 
   bool get isWeekly => selected == Plan.weekly;
   bool get freeTrialEnabled => isWeekly;
 
+  String get _selectedPlanName => selected == Plan.lifetime ? 'lifetime' : 'weekly';
+
   @override
   void initState() {
     super.initState();
+    _openTime = DateTime.now();
+    AnalyticsService.paywallViewed(source: widget.source);
     _loadOfferings();
     Purchases.addCustomerInfoUpdateListener((info) {
       final isPro = info.entitlements.active.containsKey(ENTITLEMENT_ID);
@@ -76,6 +83,7 @@ class _PaywallScreenState extends State<PaywallScreen>
       _showError('Selected product unavailable. Please try again later.');
       return;
     }
+    AnalyticsService.paywallPurchaseTapped(plan: _selectedPlanName);
     setState(() => _loading = true);
     try {
       final result = await Purchases.purchasePackage(pkg);
@@ -83,6 +91,7 @@ class _PaywallScreenState extends State<PaywallScreen>
       final isPro = info.entitlements.active.containsKey(ENTITLEMENT_ID);
       if (!mounted) return;
       if (isPro) {
+        AnalyticsService.paywallPurchaseCompleted(plan: _selectedPlanName);
         // Defer navigation until after build phase
         WidgetsBinding.instance.addPostFrameCallback((_) {
           if (mounted) _goSuccess();
@@ -93,6 +102,7 @@ class _PaywallScreenState extends State<PaywallScreen>
     } on PurchasesErrorCode {
       // User cancelled
     } catch (e) {
+      AnalyticsService.paywallPurchaseFailed(plan: _selectedPlanName, error: '$e');
       _showError('Purchase failed: $e');
     } finally {
       if (mounted) setState(() => _loading = false);
@@ -100,6 +110,7 @@ class _PaywallScreenState extends State<PaywallScreen>
   }
 
   Future<void> _restore() async {
+    AnalyticsService.paywallRestoreTapped();
     setState(() => _loading = true);
     try {
       final info = await Purchases.restorePurchases();
@@ -296,7 +307,10 @@ class _PaywallScreenState extends State<PaywallScreen>
                     subtitle: PaywallConfigService.version == 'v2' ? PaywallConfigService.v2LifetimeSubtitle : '\$14.99 for lifetime access',
                     selected: selected == Plan.lifetime,
                     chipText: PaywallConfigService.version == 'v2' ? PaywallConfigService.v2LifetimeChipText : 'SAVE 90%',
-                    onTap: () => setState(() => selected = Plan.lifetime),
+                    onTap: () {
+                      setState(() => selected = Plan.lifetime);
+                      AnalyticsService.paywallPlanSelected(plan: 'lifetime');
+                    },
                   ),
                   const SizedBox(height: 12),
                   _PlanCard(
@@ -305,32 +319,14 @@ class _PaywallScreenState extends State<PaywallScreen>
                         ? 'then ${_subPackage!.storeProduct.priceString} per week'
                         : (PaywallConfigService.version == 'v2' ? PaywallConfigService.v2WeeklySubtitleFallback : 'then \$4.99 per week'),
                     selected: selected == Plan.weekly,
-                    onTap: () => setState(() => selected = Plan.weekly),
+                    onTap: () {
+                      setState(() => selected = Plan.weekly);
+                      AnalyticsService.paywallPlanSelected(plan: 'weekly');
+                    },
                   ),
 
-                  if (PaywallConfigService.showFreeTrialToggle) ...[
-                    const SizedBox(height: 12),
-                    Container(
-                      decoration: BoxDecoration(
-                        color: Colors.white.withOpacity(0.08),
-                        borderRadius: BorderRadius.circular(12),
-                      ),
-                      child: SwitchListTile.adaptive(
-                        value: isWeekly,
-                        onChanged: (val) {
-                          setState(() {
-                            selected = val ? Plan.weekly : Plan.lifetime;
-                          });
-                        },
-                        title: const Text(
-                          'Free Trial Enabled',
-                          style: TextStyle(color: Colors.white, fontSize: 16),
-                        ),
-                        contentPadding:
-                            const EdgeInsets.symmetric(horizontal: 16),
-                      ),
-                    ),
-                  ],
+
+
 
                   const SizedBox(height: 20),
                   SizedBox(
@@ -351,7 +347,7 @@ class _PaywallScreenState extends State<PaywallScreen>
                           Text(
                             selected == Plan.lifetime
                               ? (PaywallConfigService.version == 'v2' ? PaywallConfigService.v2LifetimeButtonText : 'Unlock Now')
-                              : (PaywallConfigService.version == 'v2' ? PaywallConfigService.v2WeeklyButtonText : 'Start Free Trial'),
+                              : (PaywallConfigService.version == 'v2' ? PaywallConfigService.v2WeeklyButtonText : 'Start 3-Day Trial'),
                             style: const TextStyle(
                                 fontSize: 18, fontWeight: FontWeight.w600),
                           ),
@@ -361,6 +357,19 @@ class _PaywallScreenState extends State<PaywallScreen>
                       ),
                     ),
                   ),
+                  if (selected == Plan.weekly)
+                    const Padding(
+                      padding: EdgeInsets.only(top: 10),
+                      child: Text(
+                        '✅ NO PAYMENT NOW',
+                        textAlign: TextAlign.center,
+                        style: TextStyle(
+                          color: Colors.greenAccent,
+                          fontSize: 14,
+                          fontWeight: FontWeight.w600,
+                        ),
+                      ),
+                    ),
                   const SizedBox(height: 16),
                   SizedBox(
                     width: double.infinity,
@@ -410,6 +419,8 @@ class _PaywallScreenState extends State<PaywallScreen>
                   onPressed: _loading
                       ? null
                       : () {
+                          final timeOnPaywallSec = DateTime.now().difference(_openTime).inSeconds;
+                          AnalyticsService.paywallClosed(timeOnPaywallSec: timeOnPaywallSec);
                           Navigator.of(context).pushAndRemoveUntil(
                             MaterialPageRoute(builder: (_) => const HomeScreen()),
                             (route) => false,

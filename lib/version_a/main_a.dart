@@ -4,6 +4,7 @@ import '../../core/theme/app_theme.dart';
 import '../../core/constants/app_colors.dart';
 import '../../core/services/revenue_cat_service.dart';
 import '../../core/services/history_service.dart';
+import '../../core/services/analytics_service.dart';
 import 'screens/home_screen.dart';
 import 'screens/onboarding_screen.dart';
 
@@ -54,6 +55,13 @@ class _InitialScreenState extends State<_InitialScreen> {
         _isPro = isPro;
         _isLoading = false;
       });
+      AnalyticsService.appOpened(isPro: isPro);
+      AnalyticsService.setUserProperties(
+        isPro: isPro,
+        totalCompressions: 0,
+        totalSavingsMB: 0,
+        planType: isPro ? 'pro' : 'free',
+      );
     }
   }
 
