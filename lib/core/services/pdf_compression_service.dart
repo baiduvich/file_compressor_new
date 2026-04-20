@@ -7,6 +7,7 @@ import '../../version_a/models/file_info.dart';
 
 class PdfCompressionService {
   static const String _baseUrl = 'https://pdfcompress.odtdoceditor.com';
+  static const int _maxRetries = 3;
 
   static int _levelForPreset(CompressionPreset preset) {
     switch (preset) {
@@ -31,27 +32,39 @@ class PdfCompressionService {
         '${tmpDir.path}/${fileName}_compressed_${DateTime.now().millisecondsSinceEpoch}.pdf';
 
     try {
-      // ── Step 1: upload file to backend ───────────────────────────────────
-      final uri = Uri.parse('$_baseUrl/compress');
-      final request = http.MultipartRequest('POST', uri)
-        ..fields['level'] = level.toString()
-        ..files.add(await http.MultipartFile.fromPath(
-          'file',
-          fileInfo.path,
-          filename: fileInfo.name,
-        ));
+      // ── Step 1: upload file to backend (with retry on 503) ─────────────
+      late String responseBody;
+      for (int attempt = 0; attempt <= _maxRetries; attempt++) {
+        final uri = Uri.parse('$_baseUrl/compress');
+        final request = http.MultipartRequest('POST', uri)
+          ..fields['level'] = level.toString()
+          ..files.add(await http.MultipartFile.fromPath(
+            'file',
+            fileInfo.path,
+            filename: fileInfo.name,
+          ));
 
-      final streamedResponse = await request.send().timeout(
-        const Duration(minutes: 3),
-        onTimeout: () => throw Exception('Upload timed out after 3 minutes'),
-      );
+        final streamedResponse = await request.send().timeout(
+          const Duration(minutes: 3),
+          onTimeout: () =>
+              throw Exception('Upload timed out after 3 minutes'),
+        );
 
-      if (streamedResponse.statusCode != 200) {
-        final body = await streamedResponse.stream.bytesToString();
-        throw Exception('Server error ${streamedResponse.statusCode}: $body');
+        if (streamedResponse.statusCode == 503 && attempt < _maxRetries) {
+          await streamedResponse.stream.drain();
+          await Future.delayed(Duration(seconds: (attempt + 1) * 3));
+          continue;
+        }
+
+        if (streamedResponse.statusCode != 200) {
+          final body = await streamedResponse.stream.bytesToString();
+          throw Exception(
+              'Server error ${streamedResponse.statusCode}: $body');
+        }
+
+        responseBody = await streamedResponse.stream.bytesToString();
+        break;
       }
-
-      final responseBody = await streamedResponse.stream.bytesToString();
 
       // ── Step 2: parse compressed_url from JSON response ──────────────────
       final compressedUrl = _parseCompressedUrl(responseBody);
