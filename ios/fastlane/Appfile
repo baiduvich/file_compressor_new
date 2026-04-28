@@ -1,0 +1,3 @@
+app_identifier("com.filecompressorfilecompressor.filecompressor")
+
+# API key auth is handled in Fastfile — no apple_id needed
