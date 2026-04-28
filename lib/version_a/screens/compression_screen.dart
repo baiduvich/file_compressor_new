@@ -64,6 +64,7 @@ class _CompressionScreenState extends State<CompressionScreen>
   @override
   void initState() {
     super.initState();
+    AnalyticsService.screenViewed('compression');
     _compressionStartTime = DateTime.now();
     _counterController = AnimationController(
       vsync: this,
@@ -156,6 +157,7 @@ class _CompressionScreenState extends State<CompressionScreen>
         savingsPercent: avgRatio,
         durationSec: durationSec,
       );
+      AnalyticsService.resultsViewed(fileCount: compressed.length, avgSavings: avgRatio);
 
       // Fire review prompt asynchronously on 2nd+ compression — never blocks the UI
       _maybeRequestReview();
@@ -198,6 +200,7 @@ class _CompressionScreenState extends State<CompressionScreen>
       await prefs.setInt('compression_count', count + 1);
 
       if (count >= 1 && await _inAppReview.isAvailable()) {
+        AnalyticsService.nativeReviewRequested(source: 'compression');
         await _inAppReview.requestReview();
       }
     } catch (_) {}
@@ -235,13 +238,18 @@ class _CompressionScreenState extends State<CompressionScreen>
       AnalyticsService.featureGateHit(feature: 'share');
       if (!mounted) return;
       await Navigator.push(
-          context, MaterialPageRoute(builder: (_) => const PaywallScreen(source: 'feature_gate')));
+          context,
+          MaterialPageRoute(
+            settings: const RouteSettings(name: 'paywall'),
+            builder: (_) => const PaywallScreen(source: 'feature_gate'),
+          ));
       return;
     }
     try {
       await _fileService.shareFile(file.compressedPath!);
       AnalyticsService.fileShared();
     } catch (e) {
+      AnalyticsService.errorOccurred(location: 'share_file', error: '$e');
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(content: Text('Failed to share: $e'), backgroundColor: AppColors.error),
@@ -255,13 +263,18 @@ class _CompressionScreenState extends State<CompressionScreen>
       AnalyticsService.featureGateHit(feature: 'open');
       if (!mounted) return;
       await Navigator.push(
-          context, MaterialPageRoute(builder: (_) => const PaywallScreen(source: 'feature_gate')));
+          context,
+          MaterialPageRoute(
+            settings: const RouteSettings(name: 'paywall'),
+            builder: (_) => const PaywallScreen(source: 'feature_gate'),
+          ));
       return;
     }
     try {
       await _fileService.openFile(file.compressedPath!);
       AnalyticsService.fileOpened();
     } catch (e) {
+      AnalyticsService.errorOccurred(location: 'open_file', error: '$e');
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(content: Text('Failed to open: $e'), backgroundColor: AppColors.error),
@@ -291,6 +304,7 @@ class _CompressionScreenState extends State<CompressionScreen>
 
   Future<void> _compressOtherFiles() async {
     AnalyticsService.filePickerOpened(source: 'results');
+    AnalyticsService.screenViewed('file_picker_sheet', properties: {'source': 'results'});
     final choice = await showModalBottomSheet<String>(
       context: context,
       backgroundColor: Colors.transparent,
@@ -336,7 +350,11 @@ class _CompressionScreenState extends State<CompressionScreen>
       ),
     );
 
-    if (choice == null) return;
+    if (choice == null) {
+      AnalyticsService.filePickerCancelled(source: 'results');
+      return;
+    }
+    AnalyticsService.filePickerSourceSelected(pickerSource: choice, source: 'results');
 
     try {
       List<FileInfo> files = [];
@@ -345,23 +363,37 @@ class _CompressionScreenState extends State<CompressionScreen>
       } else {
         files = await _fileService.pickMedia();
       }
-      if (files.isEmpty) return;
+      if (files.isEmpty) {
+        AnalyticsService.filePickerCancelled(source: 'results_picker_empty');
+        return;
+      }
       if (!mounted) return;
 
+      AnalyticsService.compressionOptionsViewed();
       final options = await showDialog<Map<String, dynamic>>(
         context: context,
         builder: (_) => const CompressionOptionsDialog(),
       );
-      if (options == null) return;
+      if (options == null) {
+        AnalyticsService.compressionOptionsCancelled();
+        return;
+      }
 
       final preset = options['preset'] as CompressionPreset;
       final bundleFiles = options['bundleFiles'] as bool;
       final bulkConversion = options['bulkConversion'] as bool? ?? false;
 
+      AnalyticsService.compressionOptionsConfirmed(
+        preset: preset.name,
+        bundleFiles: bundleFiles,
+        bulkConversion: bulkConversion,
+      );
+
       if (!mounted) return;
       Navigator.pushReplacement(
         context,
         MaterialPageRoute(
+          settings: const RouteSettings(name: 'compression'),
           builder: (_) => CompressionScreen(
             files: files,
             compressionPreset: preset,
@@ -371,6 +403,7 @@ class _CompressionScreenState extends State<CompressionScreen>
         ),
       );
     } catch (e) {
+      AnalyticsService.filePickerFailed(error: '$e', source: 'results');
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(

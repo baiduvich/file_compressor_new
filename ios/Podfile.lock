@@ -63,11 +63,11 @@ PODS:
     - FlutterMacOS
   - permission_handler_apple (9.3.0):
     - Flutter
-  - PostHog (3.53.1)
+  - PostHog (3.57.1)
   - posthog_flutter (0.0.1):
     - Flutter
     - FlutterMacOS
-    - PostHog (~> 3.22)
+    - PostHog (< 4.0.0, >= 3.56.0)
   - purchases_flutter (9.10.0):
     - Flutter
     - PurchasesHybridCommon (= 17.23.0)
@@ -102,7 +102,7 @@ DEPENDENCIES:
   - in_app_review (from `.symlinks/plugins/in_app_review/ios`)
   - path_provider_foundation (from `.symlinks/plugins/path_provider_foundation/darwin`)
   - permission_handler_apple (from `.symlinks/plugins/permission_handler_apple/ios`)
-  - posthog_flutter (from `.symlinks/plugins/posthog_flutter/ios`)
+  - posthog_flutter (from `.symlinks/plugins/posthog_flutter/darwin`)
   - purchases_flutter (from `.symlinks/plugins/purchases_flutter/ios`)
   - share_plus (from `.symlinks/plugins/share_plus/ios`)
   - shared_preferences_foundation (from `.symlinks/plugins/shared_preferences_foundation/darwin`)
@@ -139,7 +139,7 @@ EXTERNAL SOURCES:
   permission_handler_apple:
     :path: ".symlinks/plugins/permission_handler_apple/ios"
   posthog_flutter:
-    :path: ".symlinks/plugins/posthog_flutter/ios"
+    :path: ".symlinks/plugins/posthog_flutter/darwin"
   purchases_flutter:
     :path: ".symlinks/plugins/purchases_flutter/ios"
   share_plus:
@@ -165,8 +165,8 @@ SPEC CHECKSUMS:
   Mantle: c5aa8794a29a022dfbbfc9799af95f477a69b62d
   path_provider_foundation: bb55f6dbba17d0dccd6737fe6f7f34fbd0376880
   permission_handler_apple: 4ed2196e43d0651e8ff7ca3483a069d469701f2d
-  PostHog: ad30566da65732988577300a118b809b8b54d696
-  posthog_flutter: 631ab870f7daf1ed190deeb2414eb3e347445f37
+  PostHog: d950a0d795c64cbb7028c039b13118c306c3618e
+  posthog_flutter: 03b15ff7a78e2a4162baaf11f8db37b079412106
   purchases_flutter: d097f27cc8431ba7cf95c3859f58524eb79d6e22
   PurchasesHybridCommon: e95a0b9bb01f6e9101d44f411343fb91030e26ae
   RevenueCat: a5fcd0a12b5ec9bbddc0cf0dd20c14b7e6213df6

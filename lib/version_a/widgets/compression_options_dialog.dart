@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_animate/flutter_animate.dart';
 import '../../core/constants/app_colors.dart';
+import '../../core/services/analytics_service.dart';
 import '../models/compression_options.dart';
 
 class CompressionOptionsDialog extends StatefulWidget {
@@ -157,7 +158,10 @@ class _CompressionOptionsDialogState extends State<CompressionOptionsDialog> {
     }
 
     return GestureDetector(
-      onTap: () => setState(() => _selectedPreset = preset),
+      onTap: () {
+        setState(() => _selectedPreset = preset);
+        AnalyticsService.compressionPresetTapped(preset: preset.name);
+      },
       child: Container(
         margin: const EdgeInsets.only(bottom: 10),
         padding: const EdgeInsets.all(14),

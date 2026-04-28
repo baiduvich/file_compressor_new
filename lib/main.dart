@@ -1,22 +1,37 @@
+import 'dart:async';
 import 'package:flutter/material.dart';
+import 'package:flutter/foundation.dart';
 import 'core/services/revenue_cat_service.dart';
 import 'core/services/paywall_config_service.dart';
 import 'core/services/analytics_service.dart';
 import 'version_a/main_a.dart';
 
-void main() async {
-  WidgetsFlutterBinding.ensureInitialized();
+void main() {
+  runZonedGuarded<Future<void>>(() async {
+    WidgetsFlutterBinding.ensureInitialized();
 
-  // Initialize RevenueCat
-  await RevenueCatService.init();
+    // Initialize PostHog FIRST so we can capture early errors / lifecycle.
+    await AnalyticsService.init();
 
-  // Initialize PostHog analytics
-  await AnalyticsService.init();
+    // Initialize RevenueCat
+    await RevenueCatService.init();
 
-  // Fetch paywall config when app opens (fire and forget)
-  PaywallConfigService.fetch();
+    // Fetch paywall config when app opens (fire and forget)
+    PaywallConfigService.fetch();
 
-  runApp(const MyApp());
+    // Catch any framework errors that slipped past PostHog autocapture.
+    FlutterError.onError = (details) {
+      FlutterError.presentError(details);
+      AnalyticsService.exceptionCaptured(details.exception, details.stack);
+    };
+
+    runApp(const MyApp());
+  }, (error, stack) {
+    if (kDebugMode) {
+      debugPrint('Uncaught zone error: $error\n$stack');
+    }
+    AnalyticsService.exceptionCaptured(error, stack);
+  });
 }
 
 class MyApp extends StatelessWidget {
@@ -24,8 +39,6 @@ class MyApp extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    // For now, always load Version A
-    // Later, we'll add RevenueCat A/B testing logic here
     return const VersionAApp();
   }
 }

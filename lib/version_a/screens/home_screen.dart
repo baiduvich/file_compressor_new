@@ -33,6 +33,7 @@ class _HomeScreenState extends State<HomeScreen> with SingleTickerProviderStateM
   @override
   void initState() {
     super.initState();
+    AnalyticsService.screenViewed('home');
     _savingsController = AnimationController(
       vsync: this,
       duration: const Duration(milliseconds: 1400),
@@ -112,8 +113,12 @@ class _HomeScreenState extends State<HomeScreen> with SingleTickerProviderStateM
       ),
     );
 
-    if (choice == null) return;
+    if (choice == null) {
+      AnalyticsService.filePickerCancelled();
+      return;
+    }
     AnalyticsService.filePickerOpened();
+    AnalyticsService.filePickerSourceSelected(pickerSource: choice);
     setState(() => _isLoading = true);
 
     try {
@@ -125,6 +130,7 @@ class _HomeScreenState extends State<HomeScreen> with SingleTickerProviderStateM
       }
 
       if (files.isEmpty) {
+        AnalyticsService.filePickerCancelled(source: 'home_picker_empty');
         setState(() => _isLoading = false);
         return;
       }
@@ -135,12 +141,14 @@ class _HomeScreenState extends State<HomeScreen> with SingleTickerProviderStateM
 
       if (!mounted) return;
 
+      AnalyticsService.compressionOptionsViewed();
       final options = await showDialog<Map<String, dynamic>>(
         context: context,
         builder: (_) => const CompressionOptionsDialog(),
       );
 
       if (options == null) {
+        AnalyticsService.compressionOptionsCancelled();
         setState(() => _isLoading = false);
         return;
       }
@@ -149,6 +157,11 @@ class _HomeScreenState extends State<HomeScreen> with SingleTickerProviderStateM
       final bundleFiles = options['bundleFiles'] as bool;
       final bulkConversion = options['bulkConversion'] as bool? ?? false;
 
+      AnalyticsService.compressionOptionsConfirmed(
+        preset: preset.name,
+        bundleFiles: bundleFiles,
+        bulkConversion: bulkConversion,
+      );
       AnalyticsService.compressionStarted(
         preset: preset.name,
         fileCount: files.length,
@@ -160,6 +173,7 @@ class _HomeScreenState extends State<HomeScreen> with SingleTickerProviderStateM
       await Navigator.push(
         context,
         MaterialPageRoute(
+          settings: const RouteSettings(name: 'compression'),
           builder: (_) => CompressionScreen(
             files: files,
             compressionPreset: preset,
@@ -171,6 +185,7 @@ class _HomeScreenState extends State<HomeScreen> with SingleTickerProviderStateM
 
       await _loadHistory();
     } catch (e) {
+      AnalyticsService.filePickerFailed(error: '$e');
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
@@ -193,10 +208,16 @@ class _HomeScreenState extends State<HomeScreen> with SingleTickerProviderStateM
         actions: [
           IconButton(
             icon: const Icon(Icons.history),
-            onPressed: () => Navigator.push(
-              context,
-              MaterialPageRoute(builder: (_) => const HistoryScreen()),
-            ),
+            onPressed: () {
+              AnalyticsService.historyOpenTapped();
+              Navigator.push(
+                context,
+                MaterialPageRoute(
+                  settings: const RouteSettings(name: 'history'),
+                  builder: (_) => const HistoryScreen(),
+                ),
+              );
+            },
           ),
         ],
       ),

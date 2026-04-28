@@ -37,8 +37,12 @@ class _PaywallScreenState extends State<PaywallScreen>
   @override
   void initState() {
     super.initState();
+    AnalyticsService.screenViewed('paywall');
     _openTime = DateTime.now();
-    AnalyticsService.paywallViewed(source: widget.source);
+    AnalyticsService.paywallViewed(
+      source: widget.source,
+      version: PaywallConfigService.version,
+    );
     _loadOfferings();
     Purchases.addCustomerInfoUpdateListener((info) {
       final isPro = info.entitlements.active.containsKey(ENTITLEMENT_ID);
@@ -70,7 +74,10 @@ class _PaywallScreenState extends State<PaywallScreen>
         _subPackage = current?.weekly ?? current?.monthly ?? current?.annual;
         _lifetimePackage = current?.lifetime;
       });
+      final count = (_subPackage != null ? 1 : 0) + (_lifetimePackage != null ? 1 : 0);
+      AnalyticsService.paywallOfferingsLoaded(productCount: count);
     } catch (e) {
+      AnalyticsService.paywallOfferingsFailed(error: '$e');
       _showError('Failed to load products: $e');
     } finally {
       if (mounted) setState(() => _loading = false);
@@ -100,7 +107,7 @@ class _PaywallScreenState extends State<PaywallScreen>
         _showSnack('Purchase pending…');
       }
     } on PurchasesErrorCode {
-      // User cancelled
+      AnalyticsService.paywallPurchaseCancelled(plan: _selectedPlanName);
     } catch (e) {
       AnalyticsService.paywallPurchaseFailed(plan: _selectedPlanName, error: '$e');
       _showError('Purchase failed: $e');
@@ -117,14 +124,16 @@ class _PaywallScreenState extends State<PaywallScreen>
       final isPro = info.entitlements.active.containsKey(ENTITLEMENT_ID);
       if (!mounted) return;
       if (isPro) {
-        // Defer navigation until after build phase
+        AnalyticsService.paywallRestoreSucceeded();
         WidgetsBinding.instance.addPostFrameCallback((_) {
           if (mounted) _goSuccess();
         });
       } else {
+        AnalyticsService.paywallRestoreEmpty();
         _showSnack('No previous purchases found.');
       }
     } catch (e) {
+      AnalyticsService.paywallRestoreFailed(error: '$e');
       _showError('Restore failed: $e');
     } finally {
       if (mounted) setState(() => _loading = false);
@@ -134,7 +143,10 @@ class _PaywallScreenState extends State<PaywallScreen>
   void _goSuccess() {
     Navigator.pushAndRemoveUntil(
       context,
-      MaterialPageRoute(builder: (_) => const HomeScreen()),
+      MaterialPageRoute(
+        settings: const RouteSettings(name: 'home'),
+        builder: (_) => const HomeScreen(),
+      ),
       (route) => false,
     );
   }
@@ -387,16 +399,20 @@ class _PaywallScreenState extends State<PaywallScreen>
                             ),
                             const SizedBox(width: 20),
                             TextButton(
-                              onPressed: () => _openUrl(
-                                  'https://sites.google.com/view/xmleula/home'),
+                              onPressed: () {
+                                AnalyticsService.paywallTermsTapped(type: 'eula');
+                                _openUrl('https://sites.google.com/view/xmleula/home');
+                              },
                               child: const Text('Terms of Use EULA',
                                   style: TextStyle(
                                       color: Colors.white70, fontSize: 12)),
                             ),
                             const SizedBox(width: 20),
                             TextButton(
-                              onPressed: () => _openUrl(
-                                  'https://sites.google.com/view/odtconverterreader/home'),
+                              onPressed: () {
+                                AnalyticsService.paywallTermsTapped(type: 'privacy');
+                                _openUrl('https://sites.google.com/view/odtconverterreader/home');
+                              },
                               child: const Text('Privacy Policy',
                                   style: TextStyle(
                                       color: Colors.white70, fontSize: 12)),
@@ -420,9 +436,16 @@ class _PaywallScreenState extends State<PaywallScreen>
                       ? null
                       : () {
                           final timeOnPaywallSec = DateTime.now().difference(_openTime).inSeconds;
-                          AnalyticsService.paywallClosed(timeOnPaywallSec: timeOnPaywallSec);
+                          AnalyticsService.paywallClosed(
+                            timeOnPaywallSec: timeOnPaywallSec,
+                            selectedPlan: _selectedPlanName,
+                            source: widget.source,
+                          );
                           Navigator.of(context).pushAndRemoveUntil(
-                            MaterialPageRoute(builder: (_) => const HomeScreen()),
+                            MaterialPageRoute(
+                              settings: const RouteSettings(name: 'home'),
+                              builder: (_) => const HomeScreen(),
+                            ),
                             (route) => false,
                           );
                         },

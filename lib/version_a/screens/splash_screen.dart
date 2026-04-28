@@ -2,6 +2,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_animate/flutter_animate.dart';
 import '../../core/constants/app_colors.dart';
+import '../../core/services/analytics_service.dart';
 import '../../core/utils/responsive.dart';
 import 'onboarding_screen.dart';
 import 'home_screen.dart';
@@ -24,14 +25,14 @@ class _SplashScreenState extends State<SplashScreen> with SingleTickerProviderSt
   @override
   void initState() {
     super.initState();
+    AnalyticsService.screenViewed('splash');
     _controller = AnimationController(
       duration: const Duration(milliseconds: 2000),
       vsync: this,
     );
-    
+
     _controller.forward();
-    
-    // Navigate after animation
+
     Future.delayed(const Duration(milliseconds: 2500), () {
       if (mounted) {
         _navigate();

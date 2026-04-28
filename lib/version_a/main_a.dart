@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:posthog_flutter/posthog_flutter.dart';
 import 'package:provider/provider.dart';
 import '../../core/theme/app_theme.dart';
 import '../../core/constants/app_colors.dart';
@@ -8,8 +9,34 @@ import '../../core/services/analytics_service.dart';
 import 'screens/home_screen.dart';
 import 'screens/onboarding_screen.dart';
 
-class VersionAApp extends StatelessWidget {
+class VersionAApp extends StatefulWidget {
   const VersionAApp({super.key});
+
+  @override
+  State<VersionAApp> createState() => _VersionAAppState();
+}
+
+class _VersionAAppState extends State<VersionAApp> with WidgetsBindingObserver {
+  @override
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addObserver(this);
+  }
+
+  @override
+  void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
+    super.dispose();
+  }
+
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    if (state == AppLifecycleState.paused || state == AppLifecycleState.hidden) {
+      AnalyticsService.appBackgrounded();
+    } else if (state == AppLifecycleState.resumed) {
+      AnalyticsService.appResumed();
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -20,8 +47,9 @@ class VersionAApp extends StatelessWidget {
         debugShowCheckedModeBanner: false,
         theme: AppTheme.lightTheme,
         darkTheme: AppTheme.darkTheme,
-        themeMode: ThemeMode.dark, // Default to dark as requested
-        home: const _InitialScreen(), // Check premium status first
+        themeMode: ThemeMode.dark,
+        navigatorObservers: [PosthogObserver()],
+        home: const _InitialScreen(),
         routes: {
           '/home': (context) => const HomeScreen(),
           '/onboarding': (context) => const OnboardingScreen(),
@@ -68,7 +96,6 @@ class _InitialScreenState extends State<_InitialScreen> {
   @override
   Widget build(BuildContext context) {
     if (_isLoading) {
-      // Show a simple loading screen while checking premium status
       return Scaffold(
         backgroundColor: Colors.black,
         body: Center(
@@ -79,8 +106,6 @@ class _InitialScreenState extends State<_InitialScreen> {
       );
     }
 
-    // If premium, go directly to home. Otherwise, show onboarding
     return _isPro ? const HomeScreen() : const OnboardingScreen();
   }
 }
-

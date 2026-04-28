@@ -31,6 +31,7 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
   @override
   void initState() {
     super.initState();
+    AnalyticsService.screenViewed('onboarding');
     _onboardingStartTime = DateTime.now();
     AnalyticsService.onboardingScreenViewed(index: 0);
     _nextCooldownSeconds = 3;
@@ -110,6 +111,7 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
   }
 
   Future<void> _onNext() async {
+    AnalyticsService.onboardingNextTapped(fromIndex: _currentPage);
     if (_currentPage < 2) {
       if (_currentPage == 1) await _maybeRequestReview();
       if (!mounted) return;
@@ -123,7 +125,10 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
       final durationSec = DateTime.now().difference(_onboardingStartTime).inSeconds;
       AnalyticsService.onboardingCompleted(durationSec: durationSec);
       Navigator.of(context).pushReplacement(
-        MaterialPageRoute(builder: (_) => const PaywallScreen(source: 'onboarding')),
+        MaterialPageRoute(
+          settings: const RouteSettings(name: 'paywall'),
+          builder: (_) => const PaywallScreen(source: 'onboarding'),
+        ),
       );
     }
   }
@@ -308,7 +313,10 @@ class _OnboardingVideoState extends State<_OnboardingVideo> {
         if (mounted) {
           setState(() {});
           _controller.play();
+          AnalyticsService.onboardingVideoStarted();
         }
+      }).catchError((Object e) {
+        AnalyticsService.onboardingVideoFailed(error: '$e');
       });
   }
 

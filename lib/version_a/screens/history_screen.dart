@@ -21,6 +21,7 @@ class _HistoryScreenState extends State<HistoryScreen> {
   @override
   void initState() {
     super.initState();
+    AnalyticsService.screenViewed('history');
     WidgetsBinding.instance.addPostFrameCallback((_) {
       final count = context.read<HistoryService>().history.length;
       AnalyticsService.historyViewed(itemCount: count);
@@ -214,6 +215,7 @@ class _HistoryScreenState extends State<HistoryScreen> {
                               await _fileService.shareFile(item.outputPath);
                               AnalyticsService.fileShared(source: 'history');
                             } catch (e) {
+                              AnalyticsService.errorOccurred(location: 'history_share', error: '$e');
                               if (!context.mounted) return;
                               ScaffoldMessenger.of(context).showSnackBar(
                                 SnackBar(
