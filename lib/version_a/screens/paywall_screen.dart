@@ -316,7 +316,9 @@ class _PaywallScreenState extends State<PaywallScreen>
                   // Plans (v1 = hardcoded, v2 = from remote JSON, read at app start)
                   _PlanCard(
                     title: PaywallConfigService.version == 'v2' ? PaywallConfigService.v2LifetimeTitle : 'Lifetime Plan',
-                    subtitle: PaywallConfigService.version == 'v2' ? PaywallConfigService.v2LifetimeSubtitle : '\$14.99 for lifetime access',
+                    subtitle: _lifetimePackage != null
+                        ? '${_lifetimePackage!.storeProduct.priceString} for lifetime access'
+                        : (PaywallConfigService.version == 'v2' ? PaywallConfigService.v2LifetimeSubtitle : '\$14.99 for lifetime access'),
                     selected: selected == Plan.lifetime,
                     chipText: PaywallConfigService.version == 'v2' ? PaywallConfigService.v2LifetimeChipText : 'SAVE 90%',
                     onTap: () {
