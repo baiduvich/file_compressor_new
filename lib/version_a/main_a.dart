@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:support_chat/support_chat.dart';
 import 'package:posthog_flutter/posthog_flutter.dart';
 import 'package:provider/provider.dart';
 import '../../core/theme/app_theme.dart';
@@ -51,7 +52,7 @@ class _VersionAAppState extends State<VersionAApp> with WidgetsBindingObserver {
         navigatorObservers: [PosthogObserver()],
         home: const _InitialScreen(),
         routes: {
-          '/home': (context) => const HomeScreen(),
+          '/home': (context) => const SupportOverlay(child: HomeScreen()),
           '/onboarding': (context) => const OnboardingScreen(),
         },
       ),
@@ -106,6 +107,8 @@ class _InitialScreenState extends State<_InitialScreen> {
       );
     }
 
-    return _isPro ? const HomeScreen() : const OnboardingScreen();
+    return _isPro
+        ? const SupportOverlay(child: HomeScreen())
+        : const OnboardingScreen();
   }
 }

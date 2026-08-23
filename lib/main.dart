@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'package:support_chat/support_chat.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/foundation.dart';
 import 'core/services/revenue_cat_service.dart';
@@ -25,6 +26,21 @@ void main() {
       AnalyticsService.exceptionCaptured(details.exception, details.stack);
     };
 
+    // In-app support: an AI answers from this app's knowledge pack in
+    // seconds, and anything it escalates reaches a human in the same thread.
+    // Light palette, because this app is light-themed.
+    SupportConfig.configure(const SupportConfig(
+      baseUrl: 'https://rfsupport.odtdoceditor.com',
+      appSecret: 'compressor_f8ceda254604e65cf30932bc',
+      palette: SupportPalette(
+        accent: Color(0xFF2196F3),
+        onAccent: Color(0xFFFFFFFF),
+        background: Color(0xFFF5F7FA),
+        surface: Color(0xFFFFFFFF),
+        textPrimary: Color(0xFF212121),
+        textMuted: Color(0xFF6B7280),
+      ),
+    ));
     runApp(const MyApp());
   }, (error, stack) {
     if (kDebugMode) {

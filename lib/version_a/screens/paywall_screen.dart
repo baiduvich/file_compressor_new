@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:support_chat/support_chat.dart';
 import 'package:url_launcher/url_launcher.dart';
 import 'package:purchases_flutter/purchases_flutter.dart';
 import '../../core/constants/app_colors.dart';
@@ -145,7 +146,7 @@ class _PaywallScreenState extends State<PaywallScreen>
       context,
       MaterialPageRoute(
         settings: const RouteSettings(name: 'home'),
-        builder: (_) => const HomeScreen(),
+        builder: (_) => const SupportOverlay(child: HomeScreen()),
       ),
       (route) => false,
     );
@@ -446,7 +447,7 @@ class _PaywallScreenState extends State<PaywallScreen>
                           Navigator.of(context).pushAndRemoveUntil(
                             MaterialPageRoute(
                               settings: const RouteSettings(name: 'home'),
-                              builder: (_) => const HomeScreen(),
+                              builder: (_) => const SupportOverlay(child: HomeScreen()),
                             ),
                             (route) => false,
                           );
