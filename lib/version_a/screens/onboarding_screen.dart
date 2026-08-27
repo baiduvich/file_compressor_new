@@ -1,7 +1,6 @@
 import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
-import 'package:in_app_review/in_app_review.dart';
 import 'package:video_player/video_player.dart';
 import '../../core/constants/app_colors.dart';
 import '../../core/utils/responsive.dart';
@@ -19,9 +18,7 @@ class OnboardingScreen extends StatefulWidget {
 
 class _OnboardingScreenState extends State<OnboardingScreen> {
   final PageController _pageController = PageController();
-  final InAppReview _inAppReview = InAppReview.instance;
   int _currentPage = 0;
-  bool _reviewRequested = false;
   int? _nextCooldownSeconds;
   Timer? _nextCooldownTimer;
   late final DateTime _onboardingStartTime;
@@ -64,56 +61,9 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
   static const String _reviewPromptAsset =
       'assets/prompt_manager/review_asking.txt';
 
-  Future<String?> _loadReviewPromptText() async {
-    try {
-      return await rootBundle.loadString(_reviewPromptAsset);
-    } catch (_) {
-      return null;
-    }
-  }
-
-  Future<void> _maybeRequestReview() async {
-    if (_reviewRequested) return;
-    _reviewRequested = true;
-    final promptText = await _loadReviewPromptText();
-    if (!mounted) return;
-    if (promptText != null && promptText.trim().isNotEmpty) {
-      AnalyticsService.reviewPromptShown();
-      await showDialog<void>(
-        context: context,
-        builder: (context) => AlertDialog(
-          title: const Text('Rate us'),
-          content: SingleChildScrollView(
-            child: Text(promptText.trim()),
-          ),
-          actions: [
-            TextButton(
-              onPressed: () {
-                AnalyticsService.reviewPromptDeclined();
-                Navigator.pop(context);
-              },
-              child: const Text('Not now'),
-            ),
-            TextButton(
-              onPressed: () {
-                AnalyticsService.reviewPromptAccepted();
-                Navigator.pop(context);
-                _inAppReview.requestReview();
-              },
-              child: const Text('Rate us'),
-            ),
-          ],
-        ),
-      );
-    } else if (await _inAppReview.isAvailable()) {
-      await _inAppReview.requestReview();
-    }
-  }
-
   Future<void> _onNext() async {
     AnalyticsService.onboardingNextTapped(fromIndex: _currentPage);
     if (_currentPage < 2) {
-      if (_currentPage == 1) await _maybeRequestReview();
       if (!mounted) return;
       _pageController.nextPage(
         duration: const Duration(milliseconds: 300),

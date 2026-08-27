@@ -1,5 +1,6 @@
 
 import 'package:flutter/material.dart';
+import 'package:support_chat/support_chat.dart';
 import 'package:flutter_animate/flutter_animate.dart';
 import '../../core/constants/app_colors.dart';
 import '../../core/services/analytics_service.dart';
@@ -43,7 +44,8 @@ class _SplashScreenState extends State<SplashScreen> with SingleTickerProviderSt
   void _navigate() {
     if (widget.hasSeenOnboarding) {
       Navigator.of(context).pushReplacement(
-        MaterialPageRoute(builder: (context) => const HomeScreen()),
+        MaterialPageRoute(
+            builder: (context) => const SupportOverlay(child: HomeScreen())),
       );
     } else {
       Navigator.of(context).pushReplacement(

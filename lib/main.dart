@@ -28,17 +28,20 @@ void main() {
 
     // In-app support: an AI answers from this app's knowledge pack in
     // seconds, and anything it escalates reaches a human in the same thread.
-    // Light palette, because this app is light-themed.
+    // Dark palette to match the app, which pins itself to ThemeMode.dark in
+    // main_a.dart. This was configured light on the assumption the app was
+    // light-themed, so the chat opened as a white sheet inside a dark app.
+    // Values are AppColors' own dark set.
     SupportConfig.configure(const SupportConfig(
       baseUrl: 'https://rfsupport.odtdoceditor.com',
       appSecret: 'compressor_f8ceda254604e65cf30932bc',
       palette: SupportPalette(
         accent: Color(0xFF2196F3),
         onAccent: Color(0xFFFFFFFF),
-        background: Color(0xFFF5F7FA),
-        surface: Color(0xFFFFFFFF),
-        textPrimary: Color(0xFF212121),
-        textMuted: Color(0xFF6B7280),
+        background: Color(0xFF121212),
+        surface: Color(0xFF1E1E1E),
+        textPrimary: Color(0xFFE0E0E0),
+        textMuted: Color(0xFFB0B0B0),
       ),
     ));
     runApp(const MyApp());
